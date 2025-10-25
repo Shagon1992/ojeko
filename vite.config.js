@@ -6,5 +6,9 @@ export default defineConfig({
   publicDir: 'public',
   build: {
     outDir: 'dist'
+  },
+  // TAMBAHKAN INI untuk Leaflet
+  optimizeDeps: {
+    include: ['leaflet', 'react-leaflet']
   }
 })
