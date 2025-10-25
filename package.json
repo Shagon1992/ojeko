@@ -1,11 +1,11 @@
 {
-  "name": "ojek-o-app",
+  "name": "ojek-o-app", 
   "version": "1.0.0",
   "type": "module",
   "description": "Ojek-O Delivery Management App",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build", 
     "preview": "vite preview",
     "start": "vite"
   },
@@ -14,25 +14,13 @@
     "react-dom": "^18.2.0",
     "@supabase/supabase-js": "^2.75.1",
     "leaflet": "^1.9.4",
-    "react-leaflet": "^5.0.0",
+    "react-leaflet": "^4.2.1",  
     "xlsx": "^0.18.5",
-    "xlsx-js-style": "^1.2.0",
+    "xlsx-js-style": "^1.2.0", 
     "file-saver": "^2.0.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "vite": "^5.0.0"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
   }
 }
