@@ -1244,6 +1244,13 @@ const DeliveryCard = ({
   };
 
   const handleSelesai = () => {
+    // 🔥 VALIDASI BARU: Cek apakah kurir sudah dipilih (khusus admin)
+    if (isAdmin && !delivery.courier_id) {
+      alert("❌ Tidak bisa menyelesaikan pengiriman!\n\nHarap pilih kurir terlebih dahulu sebelum menyelesaikan pengiriman.");
+      return;
+    }
+
+    // Validasi data customer (existing code)
     if (!isCustomerDataComplete(delivery.customers)) {
       const konfirmasi = confirm(
         "Data customer tidak lengkap. Harap lengkapi data customer terlebih dahulu sebelum menyelesaikan pengiriman. Apakah Anda ingin melengkapi data sekarang?"
@@ -1396,23 +1403,54 @@ const DeliveryCard = ({
           (!isAdmin &&
             delivery.status === "on_delivery" &&
             isAssignedCourier)) && (
-          <button
-            onClick={handleSelesai}
-            style={{
-              padding: "6px 10px",
-              background: "#10b981",
-              color: "white",
-              border: "1px solid #059669",
-              borderRadius: "4px",
-              fontSize: "10px",
-              fontWeight: "500",
-              cursor: "pointer",
-              flex: 1,
-              minWidth: "80px",
-            }}
-          >
-            ✅ Selesai
-          </button>
+          <div style={{ position: "relative", flex: 1 }}>
+            <button
+              onClick={handleSelesai}
+              disabled={isAdmin && !delivery.courier_id}
+              style={{
+                width: "100%",
+                padding: "6px 10px",
+                background: isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                fontSize: "10px",
+                fontWeight: "500",
+                cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
+                opacity: isAdmin && !delivery.courier_id ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (isAdmin && !delivery.courier_id) {
+                  const tooltip = document.createElement("div");
+                  tooltip.innerHTML = "⚠️ Pilih kurir terlebih dahulu";
+                  tooltip.style.cssText = `
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
+                    color: white;
+                    padding: 6px 10px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    white-space: nowrap;
+                    z-index: 1000;
+                    margin-bottom: 5px;
+                  `;
+                  e.target.parentNode.appendChild(tooltip);
+                  e.target._tooltip = tooltip;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.target._tooltip) {
+                  e.target._tooltip.remove();
+                  e.target._tooltip = null;
+                }
+              }}
+            >
+              {isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}
+            </button>
+          </div>
         )}
 
         {isAdmin && (
@@ -3032,4 +3070,5 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
