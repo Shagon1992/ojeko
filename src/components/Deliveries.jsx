@@ -655,6 +655,7 @@ const QuickCustomerForm = ({
   onCancel,
   initialData,
   isRequiredForCompletion = false,
+  currentUserRole // 🔥 TAMBAHKAN INI
 }) => {
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
@@ -717,17 +718,32 @@ const QuickCustomerForm = ({
       return;
     }
 
+    // 🔥 PERBAIKAN: Validasi berbeda untuk admin vs kurir
     if (isRequiredForCompletion) {
-      if (
-        !formData.lat ||
-        !formData.lng ||
-        !formData.distance_km ||
-        !formData.delivery_fee
-      ) {
-        alert(
-          "Untuk menyelesaikan pengiriman, semua data harus lengkap:\n\n• Latitude & Longitude\n• Jarak\n• Ongkos Kirim\n\nHarap lengkapi semua data terlebih dahulu."
-        );
-        return;
+      const isAdmin = currentUserRole === 'admin';
+      
+      if (isAdmin) {
+        // Admin: lat/long optional, tapi lainnya wajib
+        if (!formData.distance_km || !formData.delivery_fee) {
+          alert(
+            "Untuk menyelesaikan pengiriman, data harus lengkap:\n\n" +
+            "• Nama, No HP, Alamat ✅ WAJIB\n" +
+            "• Jarak & Ongkos Kirim ✅ WAJIB\n" +
+            "• Latitude & Longitude ❌ BOLEH KOSONG (khusus admin)\n\n" +
+            "Harap lengkapi data terlebih dahulu."
+          );
+          return;
+        }
+      } else {
+        // Kurir: semua wajib termasuk lat/long
+        if (!formData.lat || !formData.lng || !formData.distance_km || !formData.delivery_fee) {
+          alert(
+            "Untuk menyelesaikan pengiriman, semua data harus lengkap:\n\n" +
+            "• Latitude & Longitude\n• Jarak\n• Ongkos Kirim\n\n" +
+            "Harap lengkapi semua data terlebih dahulu."
+          );
+          return;
+        }
       }
     }
 
@@ -1270,10 +1286,9 @@ const DeliveryCard = ({
       if (konfirmasi) {
         setCustomerToEdit(delivery.customers);
         setShowCustomerForm(true);
-        return;
-      } else {
-        return;
+        // 🔥 TIDAK PERLU APA-APA DI SINI - biarkan state berubah dan render QuickCustomerForm
       }
+      return;
     }
   
     // 🔥 KONFIRMASI FINAL
@@ -1792,6 +1807,7 @@ const DeliveryCard = ({
           }}
           initialData={customerToEdit}
           isRequiredForCompletion={true}
+          currentUserRole={currentUser.role} // 🔥 INI YANG DITAMBAHKAN
         />
       )}
 
@@ -3074,6 +3090,7 @@ const Deliveries = () => {
             setEditingCustomer(null);
           }}
           initialData={editingCustomer}
+          currentUserRole={currentUser.role} // 🔥 TAMBAHKAN INI
         />
       )}
 
@@ -3091,6 +3108,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
