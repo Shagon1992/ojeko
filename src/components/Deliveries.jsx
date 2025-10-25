@@ -1854,6 +1854,18 @@ const Deliveries = () => {
     setHasSearched(false);
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // EFFECT BARU: Refresh search results ketika deliveries berubah
+  useEffect(() => {
+    if (customerSearch && hasSearched) {
+      // Jika sedang dalam state pencarian, refresh results
+      performSearch(customerSearch);
+    }
+  }, [deliveries, customerSearch, hasSearched]); // 🔥 TAMBAHKAN DEPENDENCIES
+
   // EFFECT UNTUK CLEANUP
   useEffect(() => {
     return () => {
@@ -1863,6 +1875,7 @@ const Deliveries = () => {
     };
   }, [searchTimeout]);
 
+  
   // Fetch data utama
   const fetchData = async () => {
     try {
@@ -1886,9 +1899,8 @@ const Deliveries = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+
+  
 
   // Filter deliveries based on active tab
   // 🔥 PASTIKAN fungsi filter sudah benar
@@ -2073,6 +2085,7 @@ const Deliveries = () => {
   };
 
   // Save customer (create or update)
+  // FUNGSI BARU: Save customer (create or update) - VERSION FIXED
   const handleSaveCustomer = async (customerData) => {
     try {
       const preparedData = {
@@ -2088,35 +2101,53 @@ const Deliveries = () => {
           ? parseInt(customerData.delivery_fee)
           : 0,
       };
-
+  
+      let newCustomerId;
+  
       if (editingCustomer?.id) {
+        // Update existing customer
         const { error } = await supabase
           .from("customers")
           .update(preparedData)
           .eq("id", editingCustomer.id);
-
+  
         if (error) throw error;
         alert("Data customer berhasil diupdate!");
+        newCustomerId = editingCustomer.id;
       } else {
+        // Create new customer
         const { data, error } = await supabase
           .from("customers")
           .insert([preparedData])
           .select()
           .single();
-
+  
         if (error) throw error;
         alert("Customer berhasil dibuat!");
-
-        setDeliveryFormData((prev) => ({ ...prev, customer_id: data.id }));
-        setCustomerSearch(data.name);
+        newCustomerId = data.id;
+  
+        // 🔥 PERBAIKAN PENTING: Otomatis pilih customer baru di form pengiriman
+        if (showCreateForm) {
+          setDeliveryFormData((prev) => ({ 
+            ...prev, 
+            customer_id: data.id 
+          }));
+          setCustomerSearch(data.name); // Set nama customer di search box
+          setSearchResults([data]); // Tampilkan customer baru di results
+          setHasSearched(true); // Tampilkan hasil pencarian
+        }
       }
-
+  
+      // Refresh data dan reset state
       setShowCustomerForm(false);
       setEditingCustomer(null);
-      fetchData();
+      fetchData(); // Refresh deliveries data
+  
+      return newCustomerId;
     } catch (error) {
       console.error("Error saving customer:", error);
       alert("Error: " + error.message);
+      return null;
     }
   };
 
@@ -2525,7 +2556,7 @@ const Deliveries = () => {
                     }}
                   >
                     {/* Case 1: Ada hasil */}
-                    {searchResults.length > 0 && (
+                    {(searchResults.length > 0 || deliveryFormData.customer_id) && (
                       <div>
                         <div
                           style={{
@@ -2537,9 +2568,13 @@ const Deliveries = () => {
                             fontWeight: "600",
                           }}
                         >
-                          📊 Ditemukan {searchResults.length} customer
+                          📊 {searchResults.length > 0 
+                            ? `Ditemukan ${searchResults.length} customer`
+                            : 'Customer terpilih'
+                          }
                         </div>
-
+                
+                        {/* 🔥 PERBAIKAN: Tampilkan customer yang baru dibuat */}
                         {searchResults.map((customer) => (
                           <div
                             key={customer.id}
@@ -2555,22 +2590,22 @@ const Deliveries = () => {
                                   : "white",
                               borderRadius: "4px",
                               margin: "2px 0",
+                              border: deliveryFormData.customer_id === customer.id 
+                                ? "1px solid #3b82f6" 
+                                : "none",
                             }}
                             onMouseOver={(e) => {
-                              if (
-                                deliveryFormData.customer_id !== customer.id
-                              ) {
+                              if (deliveryFormData.customer_id !== customer.id) {
                                 e.currentTarget.style.background = "#f8fafc";
-                                e.currentTarget.style.border =
-                                  "1px solid #e2e8f0";
+                                e.currentTarget.style.border = "1px solid #e2e8f0";
                               }
                             }}
                             onMouseOut={(e) => {
-                              if (
-                                deliveryFormData.customer_id !== customer.id
-                              ) {
+                              if (deliveryFormData.customer_id !== customer.id) {
                                 e.currentTarget.style.background = "white";
-                                e.currentTarget.style.border = "none";
+                                e.currentTarget.style.border = deliveryFormData.customer_id === customer.id 
+                                  ? "1px solid #3b82f6" 
+                                  : "none";
                               }
                             }}
                           >
@@ -2579,9 +2614,25 @@ const Deliveries = () => {
                                 fontWeight: "600",
                                 fontSize: "14px",
                                 color: "#1e293b",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
                               }}
                             >
                               {customer.name}
+                              {deliveryFormData.customer_id === customer.id && (
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    background: "#10b981",
+                                    color: "white",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                  }}
+                                >
+                                  ✅ TERPILIH
+                                </span>
+                              )}
                             </div>
                             <div
                               style={{
@@ -2610,9 +2661,9 @@ const Deliveries = () => {
                         ))}
                       </div>
                     )}
-
+                
                     {/* Case 2: Tidak ada hasil */}
-                    {searchResults.length === 0 && customerSearch && (
+                    {searchResults.length === 0 && customerSearch && !deliveryFormData.customer_id && (
                       <div
                         style={{
                           textAlign: "center",
@@ -2620,9 +2671,7 @@ const Deliveries = () => {
                           color: "#64748b",
                         }}
                       >
-                        <div style={{ fontSize: "32px", marginBottom: "12px" }}>
-                          🔍
-                        </div>
+                        <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔍</div>
                         <div
                           style={{
                             fontWeight: "500",
@@ -2643,7 +2692,7 @@ const Deliveries = () => {
                           <br />
                           <strong>"{customerSearch}"</strong>
                         </div>
-
+                
                         {/* Action Buttons */}
                         <div
                           style={{
@@ -2679,7 +2728,7 @@ const Deliveries = () => {
                           >
                             ➕ Buat Customer Baru: "{customerSearch}"
                           </button>
-
+                
                           <button
                             type="button"
                             onClick={resetSearch}
@@ -2696,7 +2745,7 @@ const Deliveries = () => {
                             🔄 Reset Pencarian
                           </button>
                         </div>
-
+                
                         {/* Search Tips */}
                         <div
                           style={{
@@ -2708,12 +2757,11 @@ const Deliveries = () => {
                             borderRadius: "4px",
                           }}
                         >
-                          💡 Tips: Cari dengan nama lengkap, nomor HP, atau
-                          bagian alamat
+                          💡 Tips: Cari dengan nama lengkap, nomor HP, atau bagian alamat
                         </div>
                       </div>
                     )}
-
+                
                     {/* Case 3: Error */}
                     {searchError && (
                       <div
@@ -2984,3 +3032,4 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
