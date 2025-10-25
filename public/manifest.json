@@ -1,0 +1,16 @@
+{
+  "name": "Ojek-O Delivery App",
+  "short_name": "Ojek-O",
+  "description": "Delivery Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ]
+}
