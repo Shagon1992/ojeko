@@ -5,56 +5,41 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-// Dynamic imports untuk komponen Leaflet - INI YANG PENTING!
+// Dynamic imports untuk menghindari SSR issues
 const MapContainer = lazy(() => import("react-leaflet").then(mod => ({ default: mod.MapContainer })));
 const TileLayer = lazy(() => import("react-leaflet").then(mod => ({ default: mod.TileLayer })));
 const Marker = lazy(() => import("react-leaflet").then(mod => ({ default: mod.Marker })));
 const useMapEvents = lazy(() => import("react-leaflet").then(mod => ({ default: mod.useMapEvents })));
 
-// Komponen handler untuk map events - DIPERBAIKI
+// Simple click handler component
 const MapClickHandler = ({ onPositionChange }) => {
-  const MapEventsComponent = () => {
-    const mapEvents = useMapEvents({
-      click: (e) => {
-        onPositionChange([e.latlng.lat, e.latlng.lng]);
-      },
-    });
-    return null;
-  };
-
-  return (
-    <Suspense fallback={null}>
-      <MapEventsComponent />
-    </Suspense>
-  );
+  const map = useMapEvents({
+    click: (e) => {
+      onPositionChange([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+  return null;
 };
 
 const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
-  const [position, setPosition] = useState([-8.0989, 112.1684]); // Default Blitar
+  const [position, setPosition] = useState([-8.0989, 112.1684]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isClient, setIsClient] = useState(false); // State untuk deteksi client
+  const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Pastikan hanya render di client
   useEffect(() => {
-    setIsClient(true);
-    
-    // Auto-detect user location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setPosition([pos.coords.latitude, pos.coords.longitude]);
           setIsLoading(false);
         },
-        (error) => {
-          console.log("Geolocation failed, using default Blitar location");
+        () => {
+          console.log("Geolocation failed, using default location");
           setIsLoading(false);
         },
         { timeout: 5000 }
@@ -88,45 +73,40 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
     });
   };
 
-  // Render map dengan error handling
-  const renderMap = () => {
-    if (!isClient) {
+  const renderMapContent = () => {
+    if (isLoading) {
       return (
-        <div
-          style={{
-            height: "100%",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            background: "#f8fafc",
-          }}
-        >
+        <div style={{
+          height: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          background: "#f8fafc",
+          color: "#64748b"
+        }}>
           Memuat peta...
         </div>
       );
     }
 
     return (
-      <Suspense 
-        fallback={
-          <div
-            style={{
-              height: "100%",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              background: "#f8fafc",
-            }}
-          >
-            Memuat komponen peta...
-          </div>
-        }
-      >
+      <Suspense fallback={
+        <div style={{
+          height: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          background: "#f8fafc",
+          color: "#64748b"
+        }}>
+          Memuat komponen peta...
+        </div>
+      }>
         <MapContainer
           center={position}
           zoom={15}
           style={{ height: "100%", width: "100%" }}
-          zoomControl={true}
+          whenReady={() => setMapLoaded(true)}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -180,7 +160,7 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             border: "2px solid #e2e8f0",
           }}
         >
-          {renderMap()}
+          {renderMapContent()}
         </div>
 
         <div
