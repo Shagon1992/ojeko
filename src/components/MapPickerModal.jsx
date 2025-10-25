@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import "leaflet/dist/leaflet.css";
 
 // Fix untuk marker icon di React
@@ -14,21 +13,40 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
+// Dynamic imports untuk komponen Leaflet - INI YANG PENTING!
+const MapContainer = lazy(() => import("react-leaflet").then(mod => ({ default: mod.MapContainer })));
+const TileLayer = lazy(() => import("react-leaflet").then(mod => ({ default: mod.TileLayer })));
+const Marker = lazy(() => import("react-leaflet").then(mod => ({ default: mod.Marker })));
+const useMapEvents = lazy(() => import("react-leaflet").then(mod => ({ default: mod.useMapEvents })));
+
+// Komponen handler untuk map events - DIPERBAIKI
 const MapClickHandler = ({ onPositionChange }) => {
-  useMapEvents({
-    click: (e) => {
-      onPositionChange([e.latlng.lat, e.latlng.lng]);
-    },
-  });
-  return null;
+  const MapEventsComponent = () => {
+    const mapEvents = useMapEvents({
+      click: (e) => {
+        onPositionChange([e.latlng.lat, e.latlng.lng]);
+      },
+    });
+    return null;
+  };
+
+  return (
+    <Suspense fallback={null}>
+      <MapEventsComponent />
+    </Suspense>
+  );
 };
 
 const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
   const [position, setPosition] = useState([-8.0989, 112.1684]); // Default Blitar
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false); // State untuk deteksi client
 
-  // Auto-detect user location
+  // Pastikan hanya render di client
   useEffect(() => {
+    setIsClient(true);
+    
+    // Auto-detect user location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -51,6 +69,76 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
     onClose();
   };
 
+  // Custom marker icon
+  const createCustomIcon = () => {
+    return L.divIcon({
+      html: `
+        <div style="
+          background: #dc2626;
+          width: 20px;
+          height: 20px;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        "></div>
+      `,
+      className: "custom-marker",
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+  };
+
+  // Render map dengan error handling
+  const renderMap = () => {
+    if (!isClient) {
+      return (
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            background: "#f8fafc",
+          }}
+        >
+          Memuat peta...
+        </div>
+      );
+    }
+
+    return (
+      <Suspense 
+        fallback={
+          <div
+            style={{
+              height: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              background: "#f8fafc",
+            }}
+          >
+            Memuat komponen peta...
+          </div>
+        }
+      >
+        <MapContainer
+          center={position}
+          zoom={15}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={true}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          />
+          <MapClickHandler onPositionChange={setPosition} />
+          <Marker position={position} icon={createCustomIcon()} />
+        </MapContainer>
+      </Suspense>
+    );
+  };
+
   return (
     <div
       style={{
@@ -65,7 +153,6 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
         alignItems: "center",
         zIndex: 1000,
         padding: "20px",
-        pointerEvents: "auto", // ← Modal area bisa diklik
       }}
     >
       <div
@@ -93,32 +180,7 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             border: "2px solid #e2e8f0",
           }}
         >
-          {isLoading ? (
-            <div
-              style={{
-                height: "100%",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "#f8fafc",
-              }}
-            >
-              Memuat peta...
-            </div>
-          ) : (
-            <MapContainer
-              center={position}
-              zoom={15}
-              style={{ height: "100%", width: "100%" }}
-            >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              />
-              <MapClickHandler onPositionChange={setPosition} />
-              <Marker position={position} />
-            </MapContainer>
-          )}
+          {renderMap()}
         </div>
 
         <div
@@ -182,8 +244,7 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             textAlign: "center",
           }}
         >
-          💡 Klik di map untuk pindah lokasi • Marker menunjukkan posisi
-          terpilih
+          💡 Klik di map untuk pindah lokasi • Titik merah menunjukkan posisi terpilih
         </div>
       </div>
     </div>
