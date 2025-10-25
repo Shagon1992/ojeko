@@ -1,4 +1,13 @@
 import React, { useState, useEffect } from "react";
+import L from "leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMapEvents,
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { supabase } from "../lib/supabase";
 import {
   createDelivery,
@@ -396,26 +405,32 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
     }
   };
 
+  // ✅ PASTIKAN IMPORT INI SUDAH ADA DI ATAS FILE:
+  // import L from "leaflet";
+  // import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+
   const renderMap = () => {
     try {
-      const {
-        MapContainer,
-        TileLayer,
-        Marker,
-        Popup,
-        useMapEvents,
-      } = require("react-leaflet");
+      // ✅ HAPUS require() - semua komponen sudah di-import di atas
 
-      const L = require("leaflet");
+      // Fix marker icons untuk Vite
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl:
+          "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+      });
 
       const createCustomIcon = () => {
         return new L.Icon({
           iconUrl: `data:image/svg+xml;base64,${btoa(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-              <path fill="#DC2626" stroke="#FFFFFF" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.5 12.5 41 12.5 41S25 21.5 25 12.5C25 5.6 19.4 0 12.5 0Z"/>
-              <circle cx="12.5" cy="12.5" r="5" fill="#FFFFFF"/>
-            </svg>
-          `)}`,
+          <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+            <path fill="#DC2626" stroke="#FFFFFF" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.5 12.5 41 12.5 41S25 21.5 25 12.5C25 5.6 19.4 0 12.5 0Z"/>
+            <circle cx="12.5" cy="12.5" r="5" fill="#FFFFFF"/>
+          </svg>
+        `)}`,
           iconSize: [25, 41],
           iconAnchor: [12, 41],
           popupAnchor: [1, -34],
