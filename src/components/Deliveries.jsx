@@ -919,7 +919,10 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                 }}
               >
-                Latitude {isRequiredForCompletion && " *"}
+                Latitude
+                {currentUserRole !== 'admin' && (
+                  <span style={{color: "#ef4444"}}> *</span>
+                )}
               </label>
               <input
                 type="number"
@@ -935,7 +938,8 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                   boxSizing: "border-box",
                 }}
-                required={isRequiredForCompletion}
+                // 🔥 HAPUS INI: required={isRequiredForCompletion}
+                placeholder={currentUserRole === 'admin' ? "Opsional" : "Wajib"}
               />
             </div>
             <div>
@@ -947,7 +951,10 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                 }}
               >
-                Longitude {isRequiredForCompletion && " *"}
+                Longitude
+                {currentUserRole !== 'admin' && (
+                  <span style={{color: "#ef4444"}}> *</span>
+                )}
               </label>
               <input
                 type="number"
@@ -963,7 +970,8 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                   boxSizing: "border-box",
                 }}
-                required={isRequiredForCompletion}
+                // 🔥 HAPUS INI: required={isRequiredForCompletion}
+                placeholder={currentUserRole === 'admin' ? "Opsional" : "Wajib"}
               />
             </div>
           </div>
@@ -3108,6 +3116,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
