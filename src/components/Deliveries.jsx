@@ -1231,31 +1231,42 @@ const DeliveryCard = ({
     }
   };
 
-  const isCustomerDataComplete = (customer) => {
-    return (
-      customer?.name &&
-      customer?.address &&
-      customer?.phone &&
-      customer?.lat &&
-      customer?.lng &&
-      customer?.distance_km &&
+  const isCustomerDataComplete = (customer, userRole) => {
+    const requiredFields = [
+      customer?.name,
+      customer?.address, 
+      customer?.phone,
+      customer?.distance_km,
       customer?.delivery_fee
-    );
+    ];
+    
+    // Untuk admin: lat/long optional
+    if (userRole === 'admin') {
+      return requiredFields.every(field => field);
+    } 
+    // Untuk kurir: semua field wajib termasuk lat/long
+    else {
+      return requiredFields.every(field => field) && 
+             customer?.lat && 
+             customer?.lng;
+    }
   };
 
   const handleSelesai = () => {
-    // 🔥 VALIDASI BARU: Cek apakah kurir sudah dipilih (khusus admin)
+    // 🔥 VALIDASI 1: Kurir harus dipilih (khusus admin)
     if (isAdmin && !delivery.courier_id) {
       alert("❌ Tidak bisa menyelesaikan pengiriman!\n\nHarap pilih kurir terlebih dahulu sebelum menyelesaikan pengiriman.");
       return;
     }
-
-    // Validasi data customer (existing code)
-    if (!isCustomerDataComplete(delivery.customers)) {
-      const konfirmasi = confirm(
-        "Data customer tidak lengkap. Harap lengkapi data customer terlebih dahulu sebelum menyelesaikan pengiriman. Apakah Anda ingin melengkapi data sekarang?"
-      );
-
+  
+    // 🔥 VALIDASI 2: Data customer (beda validasi admin vs kurir)
+    if (!isCustomerDataComplete(delivery.customers, currentUser.role)) {
+      const roleSpecificMessage = isAdmin 
+        ? "Data customer tidak lengkap. Data wajib: Nama, Alamat, No HP, Jarak, Ongkir.\n\nKoordinat (lat/long) BOLEH KOSONG untuk admin.\n\nApakah Anda ingin melengkapi data sekarang?"
+        : "Data customer tidak lengkap. Harap lengkapi SEMUA data termasuk koordinat (lat/long) sebelum menyelesaikan pengiriman.\n\nApakah Anda ingin melengkapi data sekarang?";
+      
+      const konfirmasi = confirm(roleSpecificMessage);
+  
       if (konfirmasi) {
         setCustomerToEdit(delivery.customers);
         setShowCustomerForm(true);
@@ -1264,10 +1275,9 @@ const DeliveryCard = ({
         return;
       }
     }
-
-    const konfirmasiSelesai = confirm(
-      "Apakah obat sudah benar selesai dikirim?"
-    );
+  
+    // 🔥 KONFIRMASI FINAL
+    const konfirmasiSelesai = confirm("Apakah obat sudah benar selesai dikirim?");
     if (konfirmasiSelesai) {
       onUpdateStatus(delivery.id, "completed");
     }
@@ -1276,20 +1286,31 @@ const DeliveryCard = ({
   const handleAfterCustomerUpdate = async (customerData) => {
     setShowCustomerForm(false);
     setCustomerToEdit(null);
-
+  
     try {
       const success = await onUpdateCustomer({
         ...customerData,
         id: delivery.customers.id,
       });
-
+  
       if (success) {
         setTimeout(() => {
-          const konfirmasiSelesai = confirm(
-            "Data customer sudah lengkap. Apakah Anda ingin menyelesaikan pengiriman sekarang?"
-          );
-          if (konfirmasiSelesai) {
-            onUpdateStatus(delivery.id, "completed");
+          // ✅ PERBAIKAN: Gunakan validasi yang sama seperti handleSelesai
+          if (isAdmin && !delivery.courier_id) {
+            alert("❌ Data customer sudah lengkap, tapi kurir belum dipilih!\n\nHarap pilih kurir terlebih dahulu.");
+            return;
+          }
+  
+          // ✅ PERBAIKAN: Gunakan validasi role-specific
+          if (isCustomerDataComplete(customerData, currentUser.role)) {
+            const konfirmasiSelesai = confirm(
+              "Data customer sudah lengkap. Apakah Anda ingin menyelesaikan pengiriman sekarang?"
+            );
+            if (konfirmasiSelesai) {
+              onUpdateStatus(delivery.id, "completed");
+            }
+          } else {
+            alert("❌ Data customer masih belum lengkap. Silakan lengkapi kembali.");
           }
         }, 500);
       }
@@ -1650,7 +1671,7 @@ const DeliveryCard = ({
               )}
             </div>
 
-            {!isCustomerDataComplete(delivery.customers) && (
+            {!isCustomerDataComplete(delivery.customers, currentUser.role) && (
               <div
                 style={{
                   background: "#fef2f2",
@@ -3070,5 +3091,6 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
