@@ -10,7 +10,7 @@ const RS_AMINAH_COORDINATES = {
   lng: 112.1687995,
 };
 
-// Fungsi hitung jarak dengan OSRM - FIXED ADDITION +0.5km
+// Fungsi hitung jarak dengan OSRM - FIXED ADDITION +0.3km
 const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
   try {
     console.log("Menghitung jarak dari:", RS_AMINAH_COORDINATES, "ke:", customerLat, customerLng);
@@ -31,8 +31,8 @@ const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
       const distanceMeters = data.routes[0].distance;
       const distanceKm = (distanceMeters / 1000).toFixed(2);
       
-      // 🔥 FIXED ADDITION: Selalu tambah 0.5km
-      const correctedDistanceKm = (parseFloat(distanceKm) + 0.5).toFixed(2);
+      // 🔥 FIXED ADDITION: Selalu tambah 0.3km
+      const correctedDistanceKm = (parseFloat(distanceKm) + 0.3).toFixed(2);
       
       // 🔥 JARAK MINIMAL 1 KM
       const finalDistanceKm = Math.max(parseFloat(correctedDistanceKm), 1.0).toFixed(2);
@@ -2011,5 +2011,6 @@ const Customers = () => {
 };
 
 export default Customers;
+
 
 
