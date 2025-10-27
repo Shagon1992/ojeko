@@ -30,45 +30,38 @@ const RS_AMINAH_COORDINATES = {
   lng: 112.1687995,
 };
 
-// Fungsi hitung jarak dengan OSRM - DIPERBAIKI DENGAN KOREKSI +4%
+// Fungsi hitung jarak dengan OSRM - DIPERBAIKI DENGAN JARAK MINIMAL 1km + KOREKSI +7%
 const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
   try {
-    console.log(
-      "Menghitung jarak dari:",
-      RS_AMINAH_COORDINATES,
-      "ke:",
-      customerLat,
-      customerLng
-    );
-
+    console.log("Menghitung jarak dari:", RS_AMINAH_COORDINATES, "ke:", customerLat, customerLng);
+    
     const response = await fetch(
       `https://router.project-osrm.org/route/v1/driving/` +
-        `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
+      `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
     );
-
+    
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-
+    
     const data = await response.json();
     console.log("OSRM Response:", data);
-
+    
     if (data.routes && data.routes[0]) {
       const distanceMeters = data.routes[0].distance;
       const distanceKm = (distanceMeters / 1000).toFixed(2);
-
-      // 🔥 KOREKSI +4% untuk mendekati Google Maps
-      const correctedDistanceKm = (parseFloat(distanceKm) * 1.04).toFixed(2);
-
-      console.log(
-        `Jarak OSRM: ${distanceKm} km → Setelah koreksi +4%: ${correctedDistanceKm} km`
-      );
-
-      return parseFloat(correctedDistanceKm);
+      
+      // 🔥 KOREKSI +7% untuk mendekati Google Maps
+      const correctedDistanceKm = (parseFloat(distanceKm) * 1.07).toFixed(2);
+      
+      // 🔥 JARAK MINIMAL 1 KM
+      const finalDistanceKm = Math.max(parseFloat(correctedDistanceKm), 1.0).toFixed(2);
+      
+      console.log(`Jarak OSRM: ${distanceKm} km → Koreksi +7%: ${correctedDistanceKm} km → Final (min 1km): ${finalDistanceKm} km`);
+      
+      return parseFloat(finalDistanceKm);
     } else if (data.code === "NoRoute") {
-      throw new Error(
-        "Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid."
-      );
+      throw new Error("Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid.");
     } else {
       throw new Error("Gagal menghitung jarak. Response OSRM tidak valid.");
     }
@@ -3019,3 +3012,4 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
