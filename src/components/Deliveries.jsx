@@ -1424,6 +1424,7 @@ const DeliveryCard = ({
         )}
       </div>
     );
+  };
 
   return (
     <div
@@ -3032,6 +3033,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
