@@ -30,7 +30,7 @@ const RS_AMINAH_COORDINATES = {
   lng: 112.1687995,
 };
 
-// Fungsi hitung jarak dengan OSRM - DIPERBAIKI DENGAN JARAK MINIMAL 1km + KOREKSI +7%
+// Fungsi hitung jarak dengan OSRM - FIXED ADDITION +0.5km
 const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
   try {
     console.log("Menghitung jarak dari:", RS_AMINAH_COORDINATES, "ke:", customerLat, customerLng);
@@ -51,13 +51,13 @@ const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
       const distanceMeters = data.routes[0].distance;
       const distanceKm = (distanceMeters / 1000).toFixed(2);
       
-      // 🔥 KOREKSI +7% untuk mendekati Google Maps
-      const correctedDistanceKm = (parseFloat(distanceKm) * 1.07).toFixed(2);
+      // 🔥 FIXED ADDITION: Selalu tambah 0.5km
+      const correctedDistanceKm = (parseFloat(distanceKm) + 0.5).toFixed(2);
       
       // 🔥 JARAK MINIMAL 1 KM
       const finalDistanceKm = Math.max(parseFloat(correctedDistanceKm), 1.0).toFixed(2);
       
-      console.log(`Jarak OSRM: ${distanceKm} km → Koreksi +7%: ${correctedDistanceKm} km → Final (min 1km): ${finalDistanceKm} km`);
+      console.log(`Jarak OSRM: ${distanceKm} km → +0.5km: ${correctedDistanceKm} km → Final (min 1km): ${finalDistanceKm} km`);
       
       return parseFloat(finalDistanceKm);
     } else if (data.code === "NoRoute") {
@@ -3012,4 +3012,5 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
