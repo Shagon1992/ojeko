@@ -1261,7 +1261,7 @@ const DeliveryCard = ({
             📞 WA Customer
           </button>
         )}
-
+    
         {/* WA Kurir Button */}
         {isAdmin && delivery.couriers && (
           <button
@@ -1282,7 +1282,32 @@ const DeliveryCard = ({
             📞 WA Kurir
           </button>
         )}
-
+    
+        {/* 🔥 TOMBOL BARU: Edit Data Customer */}
+        {(isAdmin || isAssignedCourier) && (
+          <button
+            onClick={() => onEditCustomer(delivery.customers)}
+            style={{
+              padding: "6px 10px",
+              background: "#e0e7ff",
+              color: "#3730a3",
+              border: "1px solid #c7d2fe",
+              borderRadius: "4px",
+              fontSize: "10px",
+              fontWeight: "500",
+              cursor: "pointer",
+              flex: 1,
+              minWidth: "80px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              justifyContent: "center",
+            }}
+          >
+            ✏️ Edit Customer
+          </button>
+        )}
+    
         {/* Tombol lainnya tetap sama */}
         {(isAdmin || isAssignedCourier) && (
           <button
@@ -1303,7 +1328,7 @@ const DeliveryCard = ({
             🔄 Ganti Kurir
           </button>
         )}
-
+    
         {!isAdmin && delivery.status === "pending" && isAssignedCourier && (
           <button
             onClick={handleKirimObat}
@@ -1323,7 +1348,7 @@ const DeliveryCard = ({
             🚗 Kirim Obat
           </button>
         )}
-
+    
         {((isAdmin && delivery.status !== "completed") ||
           (!isAdmin &&
             delivery.status === "on_delivery" &&
@@ -1335,15 +1360,13 @@ const DeliveryCard = ({
               style={{
                 width: "100%",
                 padding: "6px 10px",
-                background:
-                  isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
+                background: isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
                 fontSize: "10px",
                 fontWeight: "500",
-                cursor:
-                  isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
+                cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
                 opacity: isAdmin && !delivery.courier_id ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
@@ -1375,13 +1398,11 @@ const DeliveryCard = ({
                 }
               }}
             >
-              {isAdmin && !delivery.courier_id
-                ? "⏳ Pilih Kurir"
-                : "✅ Selesai"}
+              {isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}
             </button>
           </div>
         )}
-
+    
         {isAdmin && (
           <button
             onClick={() => onDelete(delivery.id)}
@@ -1403,7 +1424,6 @@ const DeliveryCard = ({
         )}
       </div>
     );
-  };
 
   return (
     <div
@@ -3012,6 +3032,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
