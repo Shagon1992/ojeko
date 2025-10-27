@@ -4,6 +4,60 @@ import "leaflet/dist/leaflet.css";
 import { createDelivery } from "../lib/deliveries";
 import MapPickerModal from "./MapPickerModal";
 
+// Koordinat RS Aminah Blitar
+const RS_AMINAH_COORDINATES = {
+  lat: -8.101618,
+  lng: 112.1687995,
+};
+
+// Fungsi hitung jarak dengan OSRM - DIPERBAIKI DENGAN KOREKSI +4%
+const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
+  try {
+    console.log(
+      "Menghitung jarak dari:",
+      RS_AMINAH_COORDINATES,
+      "ke:",
+      customerLat,
+      customerLng
+    );
+
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/` +
+        `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("OSRM Response:", data);
+
+    if (data.routes && data.routes[0]) {
+      const distanceMeters = data.routes[0].distance;
+      const distanceKm = (distanceMeters / 1000).toFixed(2);
+
+      // 🔥 KOREKSI +4% untuk mendekati Google Maps
+      const correctedDistanceKm = (parseFloat(distanceKm) * 1.04).toFixed(2);
+
+      console.log(
+        `Jarak OSRM: ${distanceKm} km → Setelah koreksi +4%: ${correctedDistanceKm} km`
+      );
+
+      return parseFloat(correctedDistanceKm);
+    } else if (data.code === "NoRoute") {
+      throw new Error(
+        "Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid."
+      );
+    } else {
+      throw new Error("Gagal menghitung jarak. Response OSRM tidak valid.");
+    }
+  } catch (error) {
+    console.error("OSRM error:", error);
+    throw new Error(`Gagal menghitung jarak: ${error.message}`);
+  }
+};
+
 // Customer Card Component - DENGAN TOMBOL BUAT ORDERAN
 const CustomerCard = ({
   customer,
@@ -660,12 +714,621 @@ const CreateDeliveryModal = ({ customer, couriers, onClose, onSuccess }) => {
   );
 };
 
+// 🔥 MODAL BARU: Customer Form Modal
+const CustomerFormModal = ({
+  editingCustomer,
+  onSave,
+  onClose,
+  onCalculateDistance,
+}) => {
+  const [formData, setFormData] = useState({
+    name: editingCustomer?.name || "",
+    address: editingCustomer?.address || "",
+    phone: editingCustomer?.phone || "",
+    lat: editingCustomer?.lat ? editingCustomer.lat.toString() : "",
+    lng: editingCustomer?.lng ? editingCustomer.lng.toString() : "",
+    distance_km: editingCustomer?.distance_km
+      ? editingCustomer.distance_km.toString()
+      : "",
+    delivery_fee: editingCustomer?.delivery_fee
+      ? editingCustomer.delivery_fee.toString()
+      : "",
+  });
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
+  // Handle form input change
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    let cleanedValue = value;
+
+    if (name === "distance_km") {
+      cleanedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
+    } else if (name === "delivery_fee") {
+      cleanedValue = value.replace(/\./g, "").replace(",", ".");
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: cleanedValue }));
+  };
+
+  // Function untuk handle coordinate selection from map
+  const handleCoordinateSelect = (lat, lng) => {
+    setFormData((prev) => ({
+      ...prev,
+      lat: lat.toString(),
+      lng: lng.toString(),
+    }));
+  };
+
+  // Calculate delivery fee dari jarak
+  const calculateDeliveryFeeFromDistance = () => {
+    if (!formData.distance_km) {
+      alert("Masukkan jarak terlebih dahulu!");
+      return;
+    }
+
+    const distance = parseFloat(formData.distance_km.replace(",", "."));
+    if (isNaN(distance)) {
+      alert(
+        "Format jarak tidak valid! Gunakan angka dengan titik atau koma.\nContoh: 5.2 atau 5,2"
+      );
+      return;
+    }
+
+    const rawFee = distance * 2500 + 1000;
+    const roundedFee = Math.ceil(rawFee / 500) * 500;
+
+    setFormData((prev) => ({ ...prev, delivery_fee: roundedFee.toString() }));
+    alert(`💰 Ongkos Kirim: Rp ${roundedFee.toLocaleString()}`);
+  };
+
+  // Calculate distance dari ongkir
+  const calculateDistanceFromDeliveryFee = () => {
+    if (!formData.delivery_fee) {
+      alert("Masukkan ongkir terlebih dahulu!");
+      return;
+    }
+
+    const deliveryFee = parseFloat(
+      formData.delivery_fee.replace(/\./g, "").replace(",", ".")
+    );
+    if (isNaN(deliveryFee)) {
+      alert(
+        "Format ongkir tidak valid! Gunakan angka.\nContoh: 15000 atau 15.000"
+      );
+      return;
+    }
+
+    if (deliveryFee < 1000) {
+      alert("Ongkir minimal Rp 1.000!");
+      return;
+    }
+
+    const distance = (deliveryFee - 1000) / 2500;
+    const roundedDistance = Math.round(distance * 100) / 100;
+
+    setFormData((prev) => ({
+      ...prev,
+      distance_km: roundedDistance.toString(),
+    }));
+    alert(`📏 Jarak: ${roundedDistance} km`);
+  };
+
+  // Handle submit form
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    if (
+      !formData.name?.trim() ||
+      !formData.address?.trim() ||
+      !formData.phone?.trim()
+    ) {
+      alert("Nama, Alamat, dan No HP harus diisi!");
+      return;
+    }
+
+    onSave(formData);
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0,0,0,0.8)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "12px",
+          width: "100%",
+          maxWidth: "600px",
+          maxHeight: "90vh",
+          overflow: "auto",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        }}
+      >
+        <h3
+          style={{
+            margin: "0 0 20px 0",
+            color: "#1e293b",
+            fontSize: "20px",
+            fontWeight: "600",
+            textAlign: "center",
+          }}
+        >
+          {editingCustomer
+            ? "✏️ Edit Data Pelanggan"
+            : "➕ Tambah Pelanggan Baru"}
+        </h3>
+
+        <form onSubmit={handleSubmit}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: "16px",
+              marginBottom: "16px",
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  fontSize: "14px",
+                }}
+              >
+                Nama Pelanggan *
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "2px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  transition: "all 0.2s",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+                placeholder="Masukkan nama pelanggan"
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  fontSize: "14px",
+                }}
+              >
+                No HP *
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "2px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  transition: "all 0.2s",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+                placeholder="Contoh: 08123456789"
+                required
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: "600",
+                color: "#374151",
+                fontSize: "14px",
+              }}
+            >
+              Alamat *
+            </label>
+            <textarea
+              name="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                border: "2px solid #e2e8f0",
+                borderRadius: "8px",
+                fontSize: "14px",
+                minHeight: "80px",
+                resize: "vertical",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+              placeholder="Masukkan alamat lengkap"
+              required
+            />
+          </div>
+
+          {/* Koordinat di bawah alamat */}
+          <div style={{ marginBottom: "16px" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                flexWrap: "wrap",
+                alignItems: "flex-end",
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontWeight: "600",
+                      color: "#374151",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    name="lat"
+                    value={formData.lat}
+                    onChange={handleInputChange}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "2px solid #e2e8f0",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                    placeholder="-8.0989"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                      fontWeight: "600",
+                      color: "#374151",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    name="lng"
+                    value={formData.lng}
+                    onChange={handleInputChange}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "2px solid #e2e8f0",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                    placeholder="112.1684"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMapModal(true)}
+                style={{
+                  padding: "10px 16px",
+                  background: "#4299e1",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  height: "fit-content",
+                }}
+              >
+                🗺️ Ambil Koordinat
+              </button>
+            </div>
+
+            {/* 🔥 TOMBOL BARU: Hitung Jarak dari RS */}
+            {(formData.lat || formData.lng) && (
+              <div style={{ marginTop: "12px" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCalculateDistance(
+                      formData.lat,
+                      formData.lng,
+                      setIsCalculatingDistance,
+                      setFormData
+                    )
+                  }
+                  disabled={isCalculatingDistance}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    background: isCalculatingDistance ? "#94a3b8" : "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: isCalculatingDistance ? "not-allowed" : "pointer",
+                    opacity: isCalculatingDistance ? 0.7 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {isCalculatingDistance ? (
+                    <>
+                      <div
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          border: "2px solid transparent",
+                          borderTop: "2px solid white",
+                          borderRadius: "50%",
+                          animation: "spin 1s linear infinite",
+                        }}
+                      ></div>
+                      Menghitung Jarak...
+                    </>
+                  ) : (
+                    <>📏 Hitung Jarak dari RS Aminah</>
+                  )}
+                </button>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "#64748b",
+                    textAlign: "center",
+                    marginTop: "6px",
+                  }}
+                >
+                  Akan menghitung jarak berkendara dari RS Aminah Blitar ke
+                  koordinat di atas
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "12px",
+              marginBottom: "16px",
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  fontSize: "13px",
+                }}
+              >
+                Jarak (KM)
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="number"
+                  step="0.1"
+                  name="distance_km"
+                  value={formData.distance_km}
+                  onChange={handleInputChange}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={calculateDeliveryFeeFromDistance}
+                  style={{
+                    padding: "10px 12px",
+                    background: "#8b5cf6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  🧮 Hitung Ongkir
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  fontSize: "13px",
+                }}
+              >
+                Ongkir (Rp)
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  name="delivery_fee"
+                  value={formData.delivery_fee}
+                  onChange={handleInputChange}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={calculateDistanceFromDeliveryFee}
+                  style={{
+                    padding: "10px 12px",
+                    background: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📏 Hitung Jarak
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              type="submit"
+              style={{
+                padding: "12px 20px",
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                flex: 1,
+              }}
+            >
+              {editingCustomer ? "Update Data" : "Simpan Pelanggan"}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "12px 20px",
+                background: "white",
+                color: "#6b7280",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                flex: 1,
+              }}
+            >
+              Batal
+            </button>
+          </div>
+
+          {/* Info rumus */}
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "8px 12px",
+              background: "#f0f9ff",
+              borderRadius: "6px",
+              border: "1px solid #bae6fd",
+              fontSize: "11px",
+              color: "#0369a1",
+            }}
+          >
+            💡 <strong>Rumus Ongkir:</strong> (Jarak × 2,500) + 1,000 (admin)
+            <br />
+            💰 <strong>Pembulatan:</strong> Ke atas ke kelipatan 500 terdekat
+            <br />
+            📏 <strong>Rumus Jarak:</strong> (Ongkir - 1,000) ÷ 2,500
+          </div>
+        </form>
+      </div>
+
+      {/* Map Modal */}
+      {showMapModal && (
+        <MapPickerModal
+          onCoordinateSelect={handleCoordinateSelect}
+          onClose={() => setShowMapModal(false)}
+        />
+      )}
+    </div>
+  );
+};
+
 // Main Customers Component
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false); // 🔔 UBAH: showForm jadi showFormModal
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [showMapModal, setShowMapModal] = useState(false);
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
@@ -681,20 +1344,67 @@ const Customers = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  // STATE UNTUK SEARCH - DIPERBAIKI (HILANGKAN DUPLICATE)
+  // STATE UNTUK SEARCH
   const [searchInput, setSearchInput] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    address: "",
-    phone: "",
-    lat: "",
-    lng: "",
-    distance_km: "",
-    delivery_fee: "",
-  });
+  // 🔥 FUNGSI BARU: Hitung jarak otomatis dari RS - DIPERBAIKI
+  const handleCalculateDistance = async (
+    lat,
+    lng,
+    setIsCalculating,
+    setFormData
+  ) => {
+    if (!lat || !lng) {
+      alert("❌ Harap isi koordinat latitude dan longitude terlebih dahulu!");
+      return;
+    }
+
+    const customerLat = parseFloat(lat);
+    const customerLng = parseFloat(lng);
+
+    if (isNaN(customerLat) || isNaN(customerLng)) {
+      alert("❌ Format koordinat tidak valid!");
+      return;
+    }
+
+    setIsCalculating(true);
+
+    try {
+      const distanceKm = await calculateDistanceWithOSRM(
+        customerLat,
+        customerLng
+      );
+
+      if (distanceKm) {
+        // Auto-isi jarak
+        setFormData((prev) => ({
+          ...prev,
+          distance_km: distanceKm.toString(),
+        }));
+
+        // Auto-hitung ongkir
+        const rawFee = distanceKm * 2500 + 1000;
+        const roundedFee = Math.ceil(rawFee / 500) * 500;
+
+        setFormData((prev) => ({
+          ...prev,
+          delivery_fee: roundedFee.toString(),
+        }));
+
+        alert(
+          `✅ Berhasil menghitung jarak!\n\n📏 Jarak: ${distanceKm} km\n💰 Ongkir: Rp ${roundedFee.toLocaleString()}`
+        );
+      } else {
+        alert("❌ Gagal menghitung jarak. Coba lagi.");
+      }
+    } catch (error) {
+      alert("❌ Error: " + error.message);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   // 🔥 FUNGSI BARU: Handle search input dengan debounce
   const handleSearchInput = (value) => {
@@ -709,7 +1419,7 @@ const Customers = () => {
     // Jika input kosong, reset search
     if (!value.trim()) {
       setSearchLoading(false);
-      fetchCustomers(1, itemsPerPage); // Load data normal
+      fetchCustomers(1, itemsPerPage);
       return;
     }
 
@@ -863,7 +1573,7 @@ const Customers = () => {
   // Fetch data saat component mount
   useEffect(() => {
     fetchCustomers(1, itemsPerPage);
-    fetchCouriers(); // 🔥 FETCH COURIERS JUGA
+    fetchCouriers();
   }, [itemsPerPage]);
 
   // 🔥 FUNGSI BARU: Handle buat orderan
@@ -876,8 +1586,6 @@ const Customers = () => {
   const handleDeliverySuccess = () => {
     setShowDeliveryModal(false);
     setSelectedCustomer(null);
-
-    // User mau tetap di customers, refresh data saja
     fetchCustomers(currentPage, itemsPerPage);
   };
 
@@ -904,87 +1612,8 @@ const Customers = () => {
     );
   };
 
-  // Function untuk handle coordinate selection from map
-  const handleCoordinateSelect = (lat, lng) => {
-    setFormData((prev) => ({
-      ...prev,
-      lat: lat.toString(),
-      lng: lng.toString(),
-    }));
-  };
-
-  // Calculate delivery fee dari jarak: (Jarak * 2500) + 1000, dibulatkan ke 500
-  const calculateDeliveryFeeFromDistance = () => {
-    if (!formData.distance_km) {
-      alert("Masukkan jarak terlebih dahulu!");
-      return;
-    }
-
-    const distance = parseFloat(formData.distance_km.replace(",", "."));
-    if (isNaN(distance)) {
-      alert(
-        "Format jarak tidak valid! Gunakan angka dengan titik atau koma.\nContoh: 5.2 atau 5,2"
-      );
-      return;
-    }
-
-    const rawFee = distance * 2500 + 1000;
-    const roundedFee = Math.ceil(rawFee / 500) * 500;
-
-    setFormData((prev) => ({ ...prev, delivery_fee: roundedFee.toString() }));
-    alert(`💰 Ongkos Kirim: Rp ${roundedFee.toLocaleString()}`);
-  };
-
-  // Calculate distance dari ongkir: (Ongkir - 1000) / 2500
-  const calculateDistanceFromDeliveryFee = () => {
-    if (!formData.delivery_fee) {
-      alert("Masukkan ongkir terlebih dahulu!");
-      return;
-    }
-
-    const deliveryFee = parseFloat(
-      formData.delivery_fee.replace(/\./g, "").replace(",", ".")
-    );
-    if (isNaN(deliveryFee)) {
-      alert(
-        "Format ongkir tidak valid! Gunakan angka.\nContoh: 15000 atau 15.000"
-      );
-      return;
-    }
-
-    if (deliveryFee < 1000) {
-      alert("Ongkir minimal Rp 1.000!");
-      return;
-    }
-
-    const distance = (deliveryFee - 1000) / 2500;
-    const roundedDistance = Math.round(distance * 100) / 100; // Bulatkan ke 2 desimal
-
-    setFormData((prev) => ({
-      ...prev,
-      distance_km: roundedDistance.toString(),
-    }));
-    alert(`📏 Jarak: ${roundedDistance} km`);
-  };
-
-  // Handle form input change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    let cleanedValue = value;
-
-    if (name === "distance_km") {
-      cleanedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
-    } else if (name === "delivery_fee") {
-      cleanedValue = value.replace(/\./g, "").replace(",", ".");
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: cleanedValue }));
-  };
-
   // Submit form dengan default values
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const handleSubmit = async (formData) => {
     if (
       !formData.name?.trim() ||
       !formData.address?.trim() ||
@@ -1031,21 +1660,10 @@ const Customers = () => {
     }
   };
 
-  // Edit customer - DIPERBAIKI untuk format ongkir
+  // Edit customer
   const handleEdit = (customer) => {
     setEditingCustomer(customer);
-    setFormData({
-      name: customer.name || "",
-      address: customer.address || "",
-      phone: customer.phone || "",
-      lat: customer.lat ? customer.lat.toString() : "",
-      lng: customer.lng ? customer.lng.toString() : "",
-      distance_km: customer.distance_km ? customer.distance_km.toString() : "",
-      delivery_fee: customer.delivery_fee
-        ? customer.delivery_fee.toString()
-        : "",
-    });
-    setShowForm(true);
+    setShowFormModal(true);
   };
 
   // Delete customer
@@ -1064,17 +1682,8 @@ const Customers = () => {
 
   // Reset form
   const resetForm = () => {
-    setFormData({
-      name: "",
-      address: "",
-      phone: "",
-      lat: "",
-      lng: "",
-      distance_km: "",
-      delivery_fee: "",
-    });
     setEditingCustomer(null);
-    setShowForm(false);
+    setShowFormModal(false);
     setExpandedCustomerId(null);
   };
 
@@ -1162,7 +1771,7 @@ const Customers = () => {
           </div>
 
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => setShowFormModal(true)}
             style={{
               padding: "12px 20px",
               background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -1191,7 +1800,7 @@ const Customers = () => {
           </button>
         </div>
 
-        {/* Search Bar - SUDAH BENAR */}
+        {/* Search Bar */}
         <div
           style={{
             background: "white",
@@ -1224,15 +1833,6 @@ const Customers = () => {
                   transition: "all 0.2s",
                   outline: "none",
                   boxSizing: "border-box",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "#667eea";
-                  e.target.style.boxShadow =
-                    "0 0 0 3px rgba(102, 126, 234, 0.1)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "#e2e8f0";
-                  e.target.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -1275,452 +1875,6 @@ const Customers = () => {
             </div>
           )}
         </div>
-
-        {/* Add/Edit Form */}
-        {showForm && (
-          <div
-            style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              border: "1px solid #e2e8f0",
-              marginBottom: "20px",
-              boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
-            }}
-          >
-            <h3
-              style={{
-                margin: "0 0 16px 0",
-                color: "#1e293b",
-                fontSize: "18px",
-                fontWeight: "600",
-              }}
-            >
-              {editingCustomer
-                ? "✏️ Edit Data Pelanggan"
-                : "➕ Tambah Pelanggan Baru"}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                  gap: "16px",
-                  marginBottom: "16px",
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      fontSize: "14px",
-                    }}
-                  >
-                    Nama Pelanggan *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      transition: "all 0.2s",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#667eea";
-                      e.target.style.boxShadow =
-                        "0 0 0 3px rgba(102, 126, 234, 0.1)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#e2e8f0";
-                      e.target.style.boxShadow = "none";
-                    }}
-                    placeholder="Masukkan nama pelanggan"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      fontSize: "14px",
-                    }}
-                  >
-                    No HP *
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      transition: "all 0.2s",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#667eea";
-                      e.target.style.boxShadow =
-                        "0 0 0 3px rgba(102, 126, 234, 0.1)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#e2e8f0";
-                      e.target.style.boxShadow = "none";
-                    }}
-                    placeholder="Contoh: 08123456789"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontWeight: "600",
-                    color: "#374151",
-                    fontSize: "14px",
-                  }}
-                >
-                  Alamat *
-                </label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    minHeight: "80px",
-                    resize: "vertical",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#667eea";
-                    e.target.style.boxShadow =
-                      "0 0 0 3px rgba(102, 126, 234, 0.1)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#e2e8f0";
-                    e.target.style.boxShadow = "none";
-                  }}
-                  placeholder="Masukkan alamat lengkap"
-                  required
-                />
-              </div>
-
-              {/* Koordinat di bawah alamat */}
-              <div style={{ marginBottom: "16px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    alignItems: "flex-end",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "12px",
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          color: "#374151",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Latitude
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        name="lat"
-                        value={formData.lat}
-                        onChange={handleInputChange}
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          border: "2px solid #e2e8f0",
-                          borderRadius: "6px",
-                          fontSize: "13px",
-                          outline: "none",
-                          boxSizing: "border-box",
-                        }}
-                        placeholder="-8.0989"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          color: "#374151",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Longitude
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        name="lng"
-                        value={formData.lng}
-                        onChange={handleInputChange}
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          border: "2px solid #e2e8f0",
-                          borderRadius: "6px",
-                          fontSize: "13px",
-                          outline: "none",
-                          boxSizing: "border-box",
-                        }}
-                        placeholder="112.1684"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMapModal(true)}
-                    style={{
-                      padding: "10px 16px",
-                      background: "#4299e1",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      height: "fit-content",
-                    }}
-                  >
-                    🗺️ Ambil Koordinat
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: "12px",
-                  marginBottom: "16px",
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Jarak (KM)
-                  </label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="distance_km"
-                      value={formData.distance_km}
-                      onChange={handleInputChange}
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "2px solid #e2e8f0",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                      placeholder="0"
-                    />
-                    <button
-                      type="button"
-                      onClick={calculateDeliveryFeeFromDistance}
-                      style={{
-                        padding: "10px 12px",
-                        background: "#8b5cf6",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        fontSize: "11px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      🧮 Hitung Ongkir
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Ongkir (Rp)
-                  </label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <input
-                      type="text"
-                      name="delivery_fee"
-                      value={formData.delivery_fee}
-                      onChange={handleInputChange}
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "2px solid #e2e8f0",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                      placeholder="0"
-                    />
-                    <button
-                      type="button"
-                      onClick={calculateDistanceFromDeliveryFee}
-                      style={{
-                        padding: "10px 12px",
-                        background: "#10b981",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        fontSize: "11px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      📏 Hitung Jarak
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "12px 20px",
-                    background:
-                      "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.transform = "translateY(-1px)";
-                    e.target.style.boxShadow =
-                      "0 6px 15px rgba(16, 185, 129, 0.3)";
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.transform = "translateY(0)";
-                    e.target.style.boxShadow = "none";
-                  }}
-                >
-                  {editingCustomer ? "Update Data" : "Simpan Pelanggan"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  style={{
-                    padding: "12px 20px",
-                    background: "white",
-                    color: "#6b7280",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.background = "#f9fafb";
-                    e.target.style.borderColor = "#9ca3af";
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = "white";
-                    e.target.style.borderColor = "#d1d5db";
-                  }}
-                >
-                  Batal
-                </button>
-              </div>
-
-              {/* Info rumus */}
-              <div
-                style={{
-                  marginTop: "12px",
-                  padding: "8px 12px",
-                  background: "#f0f9ff",
-                  borderRadius: "6px",
-                  border: "1px solid #bae6fd",
-                  fontSize: "11px",
-                  color: "#0369a1",
-                }}
-              >
-                💡 <strong>Rumus Ongkir:</strong> (Jarak × 2,500) + 1,000
-                (admin)
-                <br />
-                💰 <strong>Pembulatan:</strong> Ke atas ke kelipatan 500
-                terdekat
-                <br />
-                📏 <strong>Rumus Jarak:</strong> (Ongkir - 1,000) ÷ 2,500
-              </div>
-            </form>
-          </div>
-        )}
 
         {/* Customers List */}
         <div
@@ -1827,11 +1981,13 @@ const Customers = () => {
         </div>
       </div>
 
-      {/* Map Modal */}
-      {showMapModal && (
-        <MapPickerModal
-          onCoordinateSelect={handleCoordinateSelect}
-          onClose={() => setShowMapModal(false)}
+      {/* 🔔 MODAL BARU: Customer Form Modal */}
+      {showFormModal && (
+        <CustomerFormModal
+          editingCustomer={editingCustomer}
+          onSave={handleSubmit}
+          onClose={resetForm}
+          onCalculateDistance={handleCalculateDistance}
         />
       )}
 
@@ -1862,4 +2018,3 @@ const Customers = () => {
 };
 
 export default Customers;
-

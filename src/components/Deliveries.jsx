@@ -18,6 +18,65 @@ import {
 } from "../lib/deliveries";
 // CSS untuk Leaflet
 import "leaflet/dist/leaflet.css";
+import MapPickerModal from "./MapPickerModal";
+
+// =============================================
+// KONSTANTA & FUNGSI OSRM UNTUK DELIVERIES
+// =============================================
+
+// Koordinat RS Aminah Blitar
+const RS_AMINAH_COORDINATES = {
+  lat: -8.101618,
+  lng: 112.1687995,
+};
+
+// Fungsi hitung jarak dengan OSRM - DIPERBAIKI DENGAN KOREKSI +4%
+const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
+  try {
+    console.log(
+      "Menghitung jarak dari:",
+      RS_AMINAH_COORDINATES,
+      "ke:",
+      customerLat,
+      customerLng
+    );
+
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/` +
+        `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("OSRM Response:", data);
+
+    if (data.routes && data.routes[0]) {
+      const distanceMeters = data.routes[0].distance;
+      const distanceKm = (distanceMeters / 1000).toFixed(2);
+
+      // 🔥 KOREKSI +4% untuk mendekati Google Maps
+      const correctedDistanceKm = (parseFloat(distanceKm) * 1.04).toFixed(2);
+
+      console.log(
+        `Jarak OSRM: ${distanceKm} km → Setelah koreksi +4%: ${correctedDistanceKm} km`
+      );
+
+      return parseFloat(correctedDistanceKm);
+    } else if (data.code === "NoRoute") {
+      throw new Error(
+        "Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid."
+      );
+    } else {
+      throw new Error("Gagal menghitung jarak. Response OSRM tidak valid.");
+    }
+  } catch (error) {
+    console.error("OSRM error:", error);
+    throw new Error(`Gagal menghitung jarak: ${error.message}`);
+  }
+};
 
 // =============================================
 // FUNGSI HELPER UNTUK TEMPLATE MESSAGE
@@ -359,295 +418,7 @@ const TemplateModal = ({
 };
 
 // =============================================
-// KOMPONEN MAP PICKER (TETAP SAMA)
-// =============================================
-
-const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
-  const [position, setPosition] = useState([-8.0989, 112.1684]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [mapError, setMapError] = useState(false);
-
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setPosition([pos.coords.latitude, pos.coords.longitude]);
-          setIsLoading(false);
-        },
-        (error) => {
-          console.log("Geolocation failed, using default Blitar location");
-          setIsLoading(false);
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleConfirm = () => {
-    onCoordinateSelect(position[0].toFixed(6), position[1].toFixed(6));
-    onClose();
-  };
-
-  const handleManualInput = () => {
-    const lat = prompt(
-      "Masukkan Latitude (contoh: -8.0989):",
-      position[0].toFixed(6)
-    );
-    const lng = prompt(
-      "Masukkan Longitude (contoh: 112.1684):",
-      position[1].toFixed(6)
-    );
-
-    if (lat && lng) {
-      setPosition([parseFloat(lat), parseFloat(lng)]);
-    }
-  };
-
-  // ✅ PASTIKAN IMPORT INI SUDAH ADA DI ATAS FILE:
-  // import L from "leaflet";
-  // import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
-
-  const renderMap = () => {
-    try {
-      // ✅ HAPUS require() - semua komponen sudah di-import di atas
-
-      // Fix marker icons untuk Vite
-      delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl:
-          "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-        iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-        shadowUrl:
-          "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-      });
-
-      const createCustomIcon = () => {
-        return new L.Icon({
-          iconUrl: `data:image/svg+xml;base64,${btoa(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-            <path fill="#DC2626" stroke="#FFFFFF" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.5 12.5 41 12.5 41S25 21.5 25 12.5C25 5.6 19.4 0 12.5 0Z"/>
-            <circle cx="12.5" cy="12.5" r="5" fill="#FFFFFF"/>
-          </svg>
-        `)}`,
-          iconSize: [25, 41],
-          iconAnchor: [12, 41],
-          popupAnchor: [1, -34],
-          shadowSize: [41, 41],
-        });
-      };
-
-      const MapClickHandler = ({ onPositionChange }) => {
-        useMapEvents({
-          click: (e) => {
-            onPositionChange([e.latlng.lat, e.latlng.lng]);
-          },
-        });
-        return null;
-      };
-
-      return (
-        <MapContainer
-          center={position}
-          zoom={15}
-          style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={false}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          />
-          <MapClickHandler onPositionChange={setPosition} />
-          <Marker position={position} icon={createCustomIcon()}>
-            <Popup>
-              📍 Lokasi Terpilih
-              <br />
-              Lat: {position[0].toFixed(6)}
-              <br />
-              Lng: {position[1].toFixed(6)}
-            </Popup>
-          </Marker>
-        </MapContainer>
-      );
-    } catch (error) {
-      console.error("Map error:", error);
-      setMapError(true);
-      return (
-        <div
-          style={{
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            background: "#f1f5f9",
-            color: "#64748b",
-            textAlign: "center",
-            padding: "20px",
-          }}
-        >
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🗺️</div>
-          <div style={{ fontWeight: "600", marginBottom: "8px" }}>
-            Map Tidak Dapat Dimuat
-          </div>
-          <div style={{ fontSize: "14px", marginBottom: "16px" }}>
-            Error: {error.message}
-            <br />
-            Pastikan package react-leaflet terinstall dengan benar.
-          </div>
-
-          <button
-            onClick={handleManualInput}
-            style={{
-              padding: "10px 16px",
-              background: "#4299e1",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "12px",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            ✏️ Input Koordinat Manual
-          </button>
-        </div>
-      );
-    }
-  };
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0, 0, 0, 0.8)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-        padding: "20px",
-      }}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          padding: "20px",
-          width: "100%",
-          maxWidth: "500px",
-          maxHeight: "90vh",
-          overflow: "auto",
-        }}
-      >
-        <h3 style={{ margin: "0 0 16px 0", color: "#1e293b" }}>
-          🗺️ Pilih Lokasi di Map
-        </h3>
-
-        <div
-          style={{
-            height: "300px",
-            width: "100%",
-            borderRadius: "8px",
-            overflow: "hidden",
-            marginBottom: "16px",
-            border: "2px solid #e2e8f0",
-          }}
-        >
-          {isLoading ? (
-            <div
-              style={{
-                height: "100%",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "#f8fafc",
-              }}
-            >
-              Memuat peta...
-            </div>
-          ) : (
-            renderMap()
-          )}
-        </div>
-
-        <div
-          style={{
-            background: "#f8fafc",
-            padding: "12px",
-            borderRadius: "8px",
-            marginBottom: "16px",
-            fontSize: "14px",
-            color: "#64748b",
-          }}
-        >
-          <strong>Koordinat Terpilih:</strong>
-          <br />
-          Lat: {position[0].toFixed(6)}, Lng: {position[1].toFixed(6)}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            justifyContent: "flex-end",
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "10px 20px",
-              background: "white",
-              color: "#64748b",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-          >
-            Batal
-          </button>
-          <button
-            onClick={handleConfirm}
-            style={{
-              padding: "10px 20px",
-              background: "#667eea",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "600",
-            }}
-          >
-            Ambil Koordinat
-          </button>
-        </div>
-
-        {!mapError && (
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "12px",
-              color: "#94a3b8",
-              textAlign: "center",
-            }}
-          >
-            💡 Klik di map untuk pindah lokasi • Marker menunjukkan posisi
-            terpilih
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// =============================================
-// KOMPONEN QUICK CUSTOMER FORM (TETAP SAMA)
+// KOMPONEN QUICK CUSTOMER FORM - DIPERBAIKI
 // =============================================
 
 const QuickCustomerForm = ({
@@ -655,7 +426,7 @@ const QuickCustomerForm = ({
   onCancel,
   initialData,
   isRequiredForCompletion = false,
-  currentUserRole // 🔥 TAMBAHKAN INI
+  currentUserRole,
 }) => {
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
@@ -667,6 +438,56 @@ const QuickCustomerForm = ({
     delivery_fee: initialData?.delivery_fee || "",
   });
   const [showMapModal, setShowMapModal] = useState(false);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
+  // 🔥 FUNGSI BARU: Hitung jarak otomatis dari RS
+  const handleCalculateDistance = async () => {
+    if (!formData.lat || !formData.lng) {
+      alert("❌ Harap isi koordinat latitude dan longitude terlebih dahulu!");
+      return;
+    }
+
+    const lat = parseFloat(formData.lat);
+    const lng = parseFloat(formData.lng);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      alert("❌ Format koordinat tidak valid!");
+      return;
+    }
+
+    setIsCalculatingDistance(true);
+
+    try {
+      const distanceKm = await calculateDistanceWithOSRM(lat, lng);
+
+      if (distanceKm) {
+        // Auto-isi jarak
+        setFormData((prev) => ({
+          ...prev,
+          distance_km: distanceKm.toString(),
+        }));
+
+        // Auto-hitung ongkir
+        const rawFee = distanceKm * 2500 + 1000;
+        const roundedFee = Math.ceil(rawFee / 500) * 500;
+
+        setFormData((prev) => ({
+          ...prev,
+          delivery_fee: roundedFee.toString(),
+        }));
+
+        alert(
+          `✅ Berhasil menghitung jarak!\n\n📏 Jarak: ${distanceKm} km\n💰 Ongkir: Rp ${roundedFee.toLocaleString()}`
+        );
+      } else {
+        alert("❌ Gagal menghitung jarak. Coba lagi.");
+      }
+    } catch (error) {
+      alert("❌ Error: " + error.message);
+    } finally {
+      setIsCalculatingDistance(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -720,27 +541,32 @@ const QuickCustomerForm = ({
 
     // 🔥 PERBAIKAN: Validasi berbeda untuk admin vs kurir
     if (isRequiredForCompletion) {
-      const isAdmin = currentUserRole === 'admin';
-      
+      const isAdmin = currentUserRole === "admin";
+
       if (isAdmin) {
         // Admin: lat/long optional, tapi lainnya wajib
         if (!formData.distance_km || !formData.delivery_fee) {
           alert(
             "Untuk menyelesaikan pengiriman, data harus lengkap:\n\n" +
-            "• Nama, No HP, Alamat ✅ WAJIB\n" +
-            "• Jarak & Ongkos Kirim ✅ WAJIB\n" +
-            "• Latitude & Longitude ❌ BOLEH KOSONG (khusus admin)\n\n" +
-            "Harap lengkapi data terlebih dahulu."
+              "• Nama, No HP, Alamat ✅ WAJIB\n" +
+              "• Jarak & Ongkos Kirim ✅ WAJIB\n" +
+              "• Latitude & Longitude ❌ BOLEH KOSONG (khusus admin)\n\n" +
+              "Harap lengkapi data terlebih dahulu."
           );
           return;
         }
       } else {
         // Kurir: semua wajib termasuk lat/long
-        if (!formData.lat || !formData.lng || !formData.distance_km || !formData.delivery_fee) {
+        if (
+          !formData.lat ||
+          !formData.lng ||
+          !formData.distance_km ||
+          !formData.delivery_fee
+        ) {
           alert(
             "Untuk menyelesaikan pengiriman, semua data harus lengkap:\n\n" +
-            "• Latitude & Longitude\n• Jarak\n• Ongkos Kirim\n\n" +
-            "Harap lengkapi semua data terlebih dahulu."
+              "• Latitude & Longitude\n• Jarak\n• Ongkos Kirim\n\n" +
+              "Harap lengkapi semua data terlebih dahulu."
           );
           return;
         }
@@ -920,8 +746,8 @@ const QuickCustomerForm = ({
                 }}
               >
                 Latitude
-                {currentUserRole !== 'admin' && (
-                  <span style={{color: "#ef4444"}}> *</span>
+                {currentUserRole !== "admin" && (
+                  <span style={{ color: "#ef4444" }}> *</span>
                 )}
               </label>
               <input
@@ -938,8 +764,7 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                   boxSizing: "border-box",
                 }}
-                // 🔥 HAPUS INI: required={isRequiredForCompletion}
-                placeholder={currentUserRole === 'admin' ? "Opsional" : "Wajib"}
+                placeholder={currentUserRole === "admin" ? "Opsional" : "Wajib"}
               />
             </div>
             <div>
@@ -952,8 +777,8 @@ const QuickCustomerForm = ({
                 }}
               >
                 Longitude
-                {currentUserRole !== 'admin' && (
-                  <span style={{color: "#ef4444"}}> *</span>
+                {currentUserRole !== "admin" && (
+                  <span style={{ color: "#ef4444" }}> *</span>
                 )}
               </label>
               <input
@@ -970,11 +795,66 @@ const QuickCustomerForm = ({
                   fontSize: "13px",
                   boxSizing: "border-box",
                 }}
-                // 🔥 HAPUS INI: required={isRequiredForCompletion}
-                placeholder={currentUserRole === 'admin' ? "Opsional" : "Wajib"}
+                placeholder={currentUserRole === "admin" ? "Opsional" : "Wajib"}
               />
             </div>
           </div>
+
+          {/* 🔥 TOMBOL BARU: Hitung Jarak dari RS */}
+          {(formData.lat || formData.lng) && (
+            <div style={{ marginBottom: "16px" }}>
+              <button
+                type="button"
+                onClick={handleCalculateDistance}
+                disabled={isCalculatingDistance}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  background: isCalculatingDistance ? "#94a3b8" : "#10b981",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: isCalculatingDistance ? "not-allowed" : "pointer",
+                  opacity: isCalculatingDistance ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                {isCalculatingDistance ? (
+                  <>
+                    <div
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        border: "2px solid transparent",
+                        borderTop: "2px solid white",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    ></div>
+                    Menghitung Jarak...
+                  </>
+                ) : (
+                  <>📏 Hitung Jarak dari RS Aminah</>
+                )}
+              </button>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#64748b",
+                  textAlign: "center",
+                  marginTop: "6px",
+                }}
+              >
+                Akan menghitung jarak berkendara dari RS Aminah Blitar ke
+                koordinat di atas
+              </div>
+            </div>
+          )}
 
           <div style={{ marginBottom: "16px" }}>
             <label
@@ -1258,39 +1138,41 @@ const DeliveryCard = ({
   const isCustomerDataComplete = (customer, userRole) => {
     const requiredFields = [
       customer?.name,
-      customer?.address, 
+      customer?.address,
       customer?.phone,
       customer?.distance_km,
-      customer?.delivery_fee
+      customer?.delivery_fee,
     ];
-    
+
     // Untuk admin: lat/long optional
-    if (userRole === 'admin') {
-      return requiredFields.every(field => field);
-    } 
+    if (userRole === "admin") {
+      return requiredFields.every((field) => field);
+    }
     // Untuk kurir: semua field wajib termasuk lat/long
     else {
-      return requiredFields.every(field => field) && 
-             customer?.lat && 
-             customer?.lng;
+      return (
+        requiredFields.every((field) => field) && customer?.lat && customer?.lng
+      );
     }
   };
 
   const handleSelesai = () => {
     // 🔥 VALIDASI 1: Kurir harus dipilih (khusus admin)
     if (isAdmin && !delivery.courier_id) {
-      alert("❌ Tidak bisa menyelesaikan pengiriman!\n\nHarap pilih kurir terlebih dahulu sebelum menyelesaikan pengiriman.");
+      alert(
+        "❌ Tidak bisa menyelesaikan pengiriman!\n\nHarap pilih kurir terlebih dahulu sebelum menyelesaikan pengiriman."
+      );
       return;
     }
-  
+
     // 🔥 VALIDASI 2: Data customer (beda validasi admin vs kurir)
     if (!isCustomerDataComplete(delivery.customers, currentUser.role)) {
-      const roleSpecificMessage = isAdmin 
+      const roleSpecificMessage = isAdmin
         ? "Data customer tidak lengkap. Data wajib: Nama, Alamat, No HP, Jarak, Ongkir.\n\nKoordinat (lat/long) BOLEH KOSONG untuk admin.\n\nApakah Anda ingin melengkapi data sekarang?"
         : "Data customer tidak lengkap. Harap lengkapi SEMUA data termasuk koordinat (lat/long) sebelum menyelesaikan pengiriman.\n\nApakah Anda ingin melengkapi data sekarang?";
-      
+
       const konfirmasi = confirm(roleSpecificMessage);
-  
+
       if (konfirmasi) {
         setCustomerToEdit(delivery.customers);
         setShowCustomerForm(true);
@@ -1298,9 +1180,11 @@ const DeliveryCard = ({
       }
       return;
     }
-  
+
     // 🔥 KONFIRMASI FINAL
-    const konfirmasiSelesai = confirm("Apakah obat sudah benar selesai dikirim?");
+    const konfirmasiSelesai = confirm(
+      "Apakah obat sudah benar selesai dikirim?"
+    );
     if (konfirmasiSelesai) {
       onUpdateStatus(delivery.id, "completed");
     }
@@ -1309,21 +1193,23 @@ const DeliveryCard = ({
   const handleAfterCustomerUpdate = async (customerData) => {
     setShowCustomerForm(false);
     setCustomerToEdit(null);
-  
+
     try {
       const success = await onUpdateCustomer({
         ...customerData,
         id: delivery.customers.id,
       });
-  
+
       if (success) {
         setTimeout(() => {
           // ✅ PERBAIKAN: Gunakan validasi yang sama seperti handleSelesai
           if (isAdmin && !delivery.courier_id) {
-            alert("❌ Data customer sudah lengkap, tapi kurir belum dipilih!\n\nHarap pilih kurir terlebih dahulu.");
+            alert(
+              "❌ Data customer sudah lengkap, tapi kurir belum dipilih!\n\nHarap pilih kurir terlebih dahulu."
+            );
             return;
           }
-  
+
           // ✅ PERBAIKAN: Gunakan validasi role-specific
           if (isCustomerDataComplete(customerData, currentUser.role)) {
             const konfirmasiSelesai = confirm(
@@ -1333,7 +1219,9 @@ const DeliveryCard = ({
               onUpdateStatus(delivery.id, "completed");
             }
           } else {
-            alert("❌ Data customer masih belum lengkap. Silakan lengkapi kembali.");
+            alert(
+              "❌ Data customer masih belum lengkap. Silakan lengkapi kembali."
+            );
           }
         }, 500);
       }
@@ -1454,13 +1342,15 @@ const DeliveryCard = ({
               style={{
                 width: "100%",
                 padding: "6px 10px",
-                background: isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
+                background:
+                  isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
                 fontSize: "10px",
                 fontWeight: "500",
-                cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
+                cursor:
+                  isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
                 opacity: isAdmin && !delivery.courier_id ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
@@ -1492,7 +1382,9 @@ const DeliveryCard = ({
                 }
               }}
             >
-              {isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}
+              {isAdmin && !delivery.courier_id
+                ? "⏳ Pilih Kurir"
+                : "✅ Selesai"}
             </button>
           </div>
         )}
@@ -1815,7 +1707,7 @@ const DeliveryCard = ({
           }}
           initialData={customerToEdit}
           isRequiredForCompletion={true}
-          currentUserRole={currentUser.role} // 🔥 INI YANG DITAMBAHKAN
+          currentUserRole={currentUser.role}
         />
       )}
 
@@ -1958,7 +1850,6 @@ const Deliveries = () => {
     };
   }, [searchTimeout]);
 
-  
   // Fetch data utama
   const fetchData = async () => {
     try {
@@ -1981,9 +1872,6 @@ const Deliveries = () => {
       setLoading(false);
     }
   };
-
-
-  
 
   // Filter deliveries based on active tab
   // 🔥 PASTIKAN fungsi filter sudah benar
@@ -2184,16 +2072,16 @@ const Deliveries = () => {
           ? parseInt(customerData.delivery_fee)
           : 0,
       };
-  
+
       let newCustomerId;
-  
+
       if (editingCustomer?.id) {
         // Update existing customer
         const { error } = await supabase
           .from("customers")
           .update(preparedData)
           .eq("id", editingCustomer.id);
-  
+
         if (error) throw error;
         alert("Data customer berhasil diupdate!");
         newCustomerId = editingCustomer.id;
@@ -2204,28 +2092,28 @@ const Deliveries = () => {
           .insert([preparedData])
           .select()
           .single();
-  
+
         if (error) throw error;
         alert("Customer berhasil dibuat!");
         newCustomerId = data.id;
-  
+
         // 🔥 PERBAIKAN PENTING: Otomatis pilih customer baru di form pengiriman
         if (showCreateForm) {
-          setDeliveryFormData((prev) => ({ 
-            ...prev, 
-            customer_id: data.id 
+          setDeliveryFormData((prev) => ({
+            ...prev,
+            customer_id: data.id,
           }));
           setCustomerSearch(data.name); // Set nama customer di search box
           setSearchResults([data]); // Tampilkan customer baru di results
           setHasSearched(true); // Tampilkan hasil pencarian
         }
       }
-  
+
       // Refresh data dan reset state
       setShowCustomerForm(false);
       setEditingCustomer(null);
       fetchData(); // Refresh deliveries data
-  
+
       return newCustomerId;
     } catch (error) {
       console.error("Error saving customer:", error);
@@ -2639,7 +2527,8 @@ const Deliveries = () => {
                     }}
                   >
                     {/* Case 1: Ada hasil */}
-                    {(searchResults.length > 0 || deliveryFormData.customer_id) && (
+                    {(searchResults.length > 0 ||
+                      deliveryFormData.customer_id) && (
                       <div>
                         <div
                           style={{
@@ -2651,12 +2540,12 @@ const Deliveries = () => {
                             fontWeight: "600",
                           }}
                         >
-                          📊 {searchResults.length > 0 
+                          📊{" "}
+                          {searchResults.length > 0
                             ? `Ditemukan ${searchResults.length} customer`
-                            : 'Customer terpilih'
-                          }
+                            : "Customer terpilih"}
                         </div>
-                
+
                         {/* 🔥 PERBAIKAN: Tampilkan customer yang baru dibuat */}
                         {searchResults.map((customer) => (
                           <div
@@ -2673,22 +2562,29 @@ const Deliveries = () => {
                                   : "white",
                               borderRadius: "4px",
                               margin: "2px 0",
-                              border: deliveryFormData.customer_id === customer.id 
-                                ? "1px solid #3b82f6" 
-                                : "none",
+                              border:
+                                deliveryFormData.customer_id === customer.id
+                                  ? "1px solid #3b82f6"
+                                  : "none",
                             }}
                             onMouseOver={(e) => {
-                              if (deliveryFormData.customer_id !== customer.id) {
+                              if (
+                                deliveryFormData.customer_id !== customer.id
+                              ) {
                                 e.currentTarget.style.background = "#f8fafc";
-                                e.currentTarget.style.border = "1px solid #e2e8f0";
+                                e.currentTarget.style.border =
+                                  "1px solid #e2e8f0";
                               }
                             }}
                             onMouseOut={(e) => {
-                              if (deliveryFormData.customer_id !== customer.id) {
+                              if (
+                                deliveryFormData.customer_id !== customer.id
+                              ) {
                                 e.currentTarget.style.background = "white";
-                                e.currentTarget.style.border = deliveryFormData.customer_id === customer.id 
-                                  ? "1px solid #3b82f6" 
-                                  : "none";
+                                e.currentTarget.style.border =
+                                  deliveryFormData.customer_id === customer.id
+                                    ? "1px solid #3b82f6"
+                                    : "none";
                               }
                             }}
                           >
@@ -2744,107 +2640,114 @@ const Deliveries = () => {
                         ))}
                       </div>
                     )}
-                
+
                     {/* Case 2: Tidak ada hasil */}
-                    {searchResults.length === 0 && customerSearch && !deliveryFormData.customer_id && (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          padding: "30px 20px",
-                          color: "#64748b",
-                        }}
-                      >
-                        <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔍</div>
+                    {searchResults.length === 0 &&
+                      customerSearch &&
+                      !deliveryFormData.customer_id && (
                         <div
                           style={{
-                            fontWeight: "500",
-                            marginBottom: "8px",
-                            color: "#374151",
+                            textAlign: "center",
+                            padding: "30px 20px",
+                            color: "#64748b",
                           }}
                         >
-                          Tidak ada customer yang cocok
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            marginBottom: "16px",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          Tidak ditemukan customer dengan kata kunci:
-                          <br />
-                          <strong>"{customerSearch}"</strong>
-                        </div>
-                
-                        {/* Action Buttons */}
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowCustomerForm(true);
-                              setEditingCustomer({
-                                name: customerSearch,
-                                phone: "",
-                                address: "",
-                                lat: "",
-                                lng: "",
-                                distance_km: "",
-                                delivery_fee: "",
-                              });
-                            }}
+                          <div
+                            style={{ fontSize: "32px", marginBottom: "12px" }}
+                          >
+                            🔍
+                          </div>
+                          <div
                             style={{
-                              padding: "10px 16px",
-                              background: "#10b981",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                              fontWeight: "600",
-                              cursor: "pointer",
+                              fontWeight: "500",
+                              marginBottom: "8px",
+                              color: "#374151",
                             }}
                           >
-                            ➕ Buat Customer Baru: "{customerSearch}"
-                          </button>
-                
-                          <button
-                            type="button"
-                            onClick={resetSearch}
+                            Tidak ada customer yang cocok
+                          </div>
+                          <div
                             style={{
-                              padding: "8px 16px",
-                              background: "transparent",
-                              color: "#64748b",
-                              border: "1px solid #e2e8f0",
-                              borderRadius: "6px",
                               fontSize: "12px",
-                              cursor: "pointer",
+                              marginBottom: "16px",
+                              lineHeight: "1.4",
                             }}
                           >
-                            🔄 Reset Pencarian
-                          </button>
+                            Tidak ditemukan customer dengan kata kunci:
+                            <br />
+                            <strong>"{customerSearch}"</strong>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCustomerForm(true);
+                                setEditingCustomer({
+                                  name: customerSearch,
+                                  phone: "",
+                                  address: "",
+                                  lat: "",
+                                  lng: "",
+                                  distance_km: "",
+                                  delivery_fee: "",
+                                });
+                              }}
+                              style={{
+                                padding: "10px 16px",
+                                background: "#10b981",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ➕ Buat Customer Baru: "{customerSearch}"
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={resetSearch}
+                              style={{
+                                padding: "8px 16px",
+                                background: "transparent",
+                                color: "#64748b",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              🔄 Reset Pencarian
+                            </button>
+                          </div>
+
+                          {/* Search Tips */}
+                          <div
+                            style={{
+                              marginTop: "16px",
+                              fontSize: "11px",
+                              color: "#94a3b8",
+                              padding: "8px",
+                              background: "#f8fafc",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            💡 Tips: Cari dengan nama lengkap, nomor HP, atau
+                            bagian alamat
+                          </div>
                         </div>
-                
-                        {/* Search Tips */}
-                        <div
-                          style={{
-                            marginTop: "16px",
-                            fontSize: "11px",
-                            color: "#94a3b8",
-                            padding: "8px",
-                            background: "#f8fafc",
-                            borderRadius: "4px",
-                          }}
-                        >
-                          💡 Tips: Cari dengan nama lengkap, nomor HP, atau bagian alamat
-                        </div>
-                      </div>
-                    )}
-                
+                      )}
+
                     {/* Case 3: Error */}
                     {searchError && (
                       <div
@@ -3098,7 +3001,7 @@ const Deliveries = () => {
             setEditingCustomer(null);
           }}
           initialData={editingCustomer}
-          currentUserRole={currentUser.role} // 🔥 TAMBAHKAN INI
+          currentUserRole={currentUser.role}
         />
       )}
 
@@ -3116,8 +3019,3 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
-
-
-
-
-
