@@ -13,17 +13,31 @@ const ChangePassword = () => {
     new: false,
     confirm: false,
   });
+  const [message, setMessage] = useState({ text: "", type: "" }); // ✅ Phase 2: State untuk message
+
+  // ✅ Phase 2: Function untuk show message
+  const showMessage = (text, type = "error") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: "", type: "" }), 5000);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage({ text: "", type: "" }); // Reset message
+
+    // ✅ Phase 2: Validasi input
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
+      showMessage("Semua field harus diisi!");
+      return;
+    }
 
     if (formData.newPassword !== formData.confirmPassword) {
-      alert("Password baru dan konfirmasi password tidak cocok");
+      showMessage("Password baru dan konfirmasi password tidak cocok");
       return;
     }
 
     if (formData.newPassword.length < 1) {
-      alert("Password tidak boleh kosong");
+      showMessage("Password tidak boleh kosong");
       return;
     }
 
@@ -31,22 +45,25 @@ const ChangePassword = () => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
 
-      // Verify current password
+      // ✅ Phase 1: Verify current password - FIX KONSISTENSI
       const { data: userData, error: verifyError } = await supabase
         .from("users")
-        .select("*")
+        .select("password")
         .eq("username", user.username)
         .single();
 
       if (verifyError) throw verifyError;
 
+      // ✅ Phase 1: Decode password dari DB menggunakan atob()
       const decodedCurrentPassword = atob(userData.password);
+      
+      // ✅ Phase 1: Compare dengan input user
       if (formData.currentPassword !== decodedCurrentPassword) {
-        alert("Password saat ini salah");
+        showMessage("Password saat ini salah"); // ✅ Phase 2: Ganti alert
         return;
       }
 
-      // Update password
+      // ✅ Phase 1: Update password - encode baru dengan btoa()
       const encodedNewPassword = btoa(formData.newPassword);
       const { error: updateError } = await supabase
         .from("users")
@@ -55,14 +72,17 @@ const ChangePassword = () => {
 
       if (updateError) throw updateError;
 
-      alert("Password berhasil diubah!");
+      showMessage("Password berhasil diubah!", "success"); // ✅ Phase 2: Ganti alert
+      
+      // Reset form
       setFormData({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
     } catch (error) {
-      alert("Error: " + error.message);
+      console.error("Error:", error);
+      showMessage("Terjadi kesalahan: " + error.message); // ✅ Phase 2: Ganti alert
     } finally {
       setLoading(false);
     }
@@ -72,6 +92,15 @@ const ChangePassword = () => {
     setShowPasswords((prev) => ({
       ...prev,
       [field]: !prev[field],
+    }));
+  };
+
+  // ✅ Phase 2: Handle input change
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
     }));
   };
 
@@ -87,6 +116,24 @@ const ChangePassword = () => {
       >
         🔐 Ganti Password
       </h2>
+
+      {/* ✅ Phase 2: Message Alert */}
+      {message.text && (
+        <div
+          style={{
+            padding: "12px 16px",
+            background: message.type === "success" ? "#f0fdf4" : "#fef2f2",
+            border: `1px solid ${message.type === "success" ? "#bbf7d0" : "#fecaca"}`,
+            color: message.type === "success" ? "#166534" : "#dc2626",
+            borderRadius: "8px",
+            marginBottom: "20px",
+            fontSize: "14px",
+            fontWeight: "500",
+          }}
+        >
+          {message.type === "success" ? "✅" : "❌"} {message.text}
+        </div>
+      )}
 
       <div
         style={{
@@ -114,10 +161,9 @@ const ChangePassword = () => {
             <div style={{ position: "relative", width: "100%" }}>
               <input
                 type={showPasswords.current ? "text" : "password"}
+                name="currentPassword"
                 value={formData.currentPassword}
-                onChange={(e) =>
-                  setFormData({ ...formData, currentPassword: e.target.value })
-                }
+                onChange={handleInputChange}
                 style={{
                   width: "100%",
                   padding: "12px 40px 12px 12px",
@@ -138,7 +184,7 @@ const ChangePassword = () => {
                   e.target.style.boxShadow = "none";
                 }}
                 placeholder="Masukkan password saat ini"
-                required
+                disabled={loading}
               />
               <button
                 type="button"
@@ -160,6 +206,7 @@ const ChangePassword = () => {
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                disabled={loading}
               >
                 {showPasswords.current ? "🙈" : "👁️"}
               </button>
@@ -182,10 +229,9 @@ const ChangePassword = () => {
             <div style={{ position: "relative", width: "100%" }}>
               <input
                 type={showPasswords.new ? "text" : "password"}
+                name="newPassword"
                 value={formData.newPassword}
-                onChange={(e) =>
-                  setFormData({ ...formData, newPassword: e.target.value })
-                }
+                onChange={handleInputChange}
                 style={{
                   width: "100%",
                   padding: "12px 40px 12px 12px",
@@ -206,7 +252,7 @@ const ChangePassword = () => {
                   e.target.style.boxShadow = "none";
                 }}
                 placeholder="Masukkan password baru"
-                required
+                disabled={loading}
               />
               <button
                 type="button"
@@ -228,6 +274,7 @@ const ChangePassword = () => {
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                disabled={loading}
               >
                 {showPasswords.new ? "🙈" : "👁️"}
               </button>
@@ -250,10 +297,9 @@ const ChangePassword = () => {
             <div style={{ position: "relative", width: "100%" }}>
               <input
                 type={showPasswords.confirm ? "text" : "password"}
+                name="confirmPassword"
                 value={formData.confirmPassword}
-                onChange={(e) =>
-                  setFormData({ ...formData, confirmPassword: e.target.value })
-                }
+                onChange={handleInputChange}
                 style={{
                   width: "100%",
                   padding: "12px 40px 12px 12px",
@@ -274,7 +320,7 @@ const ChangePassword = () => {
                   e.target.style.boxShadow = "none";
                 }}
                 placeholder="Konfirmasi password baru"
-                required
+                disabled={loading}
               />
               <button
                 type="button"
@@ -296,6 +342,7 @@ const ChangePassword = () => {
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                disabled={loading}
               >
                 {showPasswords.confirm ? "🙈" : "👁️"}
               </button>
