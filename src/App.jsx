@@ -10,6 +10,10 @@ import ImportCustomers from "./components/ImportCustomers"; // ✅ TAMBAH INI
 import Settings from "./components/Settings/Settings";
 import "./App.css";
 
+// 🔥 IMPORT ONESIGNAL
+import OneSignal from "react-onesignal";
+import { supabase } from "./lib/supabase"; // Pastikan path ini sesuai
+
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,6 +22,72 @@ function App() {
   // 🎯 PERBAIKAN: Definisikan isAdmin di sini
   const isAdmin = user?.role === "admin";
 
+  // 🔥 ONESIGNAL INITIALIZATION
+  useEffect(() => {
+    const initializePushNotification = async () => {
+      try {
+        // Initialize OneSignal
+        await OneSignal.init({
+          appId: "3a700cc3-8ebb-43ed-b453-06f6ba021c59", // App ID Anda
+          allowLocalhostAsSecureOrigin: true,
+        });
+        
+        console.log('✅ OneSignal initialized');
+
+        // Register device token untuk user yang sedang login
+        await registerDeviceToken();
+        
+      } catch (error) {
+        console.error('❌ OneSignal error:', error);
+      }
+    };
+
+    // Function untuk register device token ke database
+    const registerDeviceToken = async () => {
+      try {
+        const currentUser = JSON.parse(localStorage.getItem("user"));
+        
+        if (!currentUser) {
+          console.log('⚠️ No user logged in, skipping device registration');
+          return;
+        }
+        
+        // Dapatkan device token dari OneSignal
+        const deviceId = await OneSignal.getUserId();
+        
+        if (deviceId && currentUser.courier_id) {
+          console.log('📱 Registering device for courier:', currentUser.courier_id);
+          
+          // Simpan device token ke database
+          const { error } = await supabase
+            .from('courier_devices')
+            .upsert({
+              courier_id: currentUser.courier_id,
+              device_token: deviceId,
+              platform: 'web',
+              is_active: true
+            }, {
+              onConflict: 'courier_id,device_token'
+            });
+
+          if (error) {
+            console.error('❌ Error saving device token:', error);
+          } else {
+            console.log('✅ Device token registered for courier:', currentUser.courier_id);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in registerDeviceToken:', error);
+      }
+    };
+
+    // Jalankan initialization hanya jika user sudah login
+    if (user) {
+      initializePushNotification();
+    }
+  }, [user]); // 🔥 Run effect ketika user berubah
+
+  
   // Close mobile menu when resizing to desktop
   useEffect(() => {
     const handleResize = () => {
