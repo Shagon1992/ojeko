@@ -23,60 +23,59 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   // 🔥 ONESIGNAL INITIALIZATION
-  // 🔥 PERBAIKAN ONESIGNAL INITIALIZATION
+  // 🔥 ONESIGNAL INITIALIZATION - SIMPLE VERSION
   useEffect(() => {
-    const initializePushNotification = async () => {
-      try {
-        // Tunggu sampai OneSignal SDK siap
-        if (typeof window.OneSignal !== 'undefined') {
-          await window.OneSignal.init({
-            appId: "3a700cc3-8ebb-43ed-b453-06f6ba021c59",
-          });
-          
-          console.log('✅ OneSignal initialized');
-          await registerDeviceToken();
-        } else {
-          // Fallback: coba lagi setelah delay
-          setTimeout(initializePushNotification, 1000);
-        }
-        
-      } catch (error) {
-        console.error('❌ OneSignal error:', error);
-      }
-    };
-  
     const registerDeviceToken = async () => {
       try {
         const currentUser = JSON.parse(localStorage.getItem("user"));
         
-        if (!currentUser || !currentUser.courier_id) return;
-        
-        // Dapatkan device token
-        const deviceId = await window.OneSignal.getUserId();
-        
-        if (deviceId) {
-          const { error } = await supabase
-            .from('courier_devices')
-            .upsert({
-              courier_id: currentUser.courier_id,
-              device_token: deviceId,
-              platform: 'web',
-              is_active: true
-            }, {
-              onConflict: 'courier_id,device_token'
-            });
-  
-          if (!error) {
-            console.log('✅ Device token registered');
-          }
+        if (!currentUser || !currentUser.courier_id) {
+          return;
         }
+        
+        // Tunggu sampai OneSignal ready
+        const checkOneSignal = async () => {
+          if (window.OneSignal) {
+            try {
+              const deviceId = await window.OneSignal.getUserId();
+              
+              if (deviceId) {
+                console.log('📱 Device token found:', deviceId);
+                
+                const { error } = await supabase
+                  .from('courier_devices')
+                  .upsert({
+                    courier_id: currentUser.courier_id,
+                    device_token: deviceId,
+                    platform: 'web',
+                    is_active: true
+                  }, {
+                    onConflict: 'courier_id,device_token'
+                  });
+  
+                if (!error) {
+                  console.log('✅ Device token registered for courier:', currentUser.courier_id);
+                }
+              }
+            } catch (error) {
+              console.error('❌ Device registration error:', error);
+            }
+          } else {
+            // OneSignal belum ready, coba lagi dalam 1 detik
+            setTimeout(checkOneSignal, 1000);
+          }
+        };
+        
+        checkOneSignal();
+        
       } catch (error) {
-        console.error('❌ Device registration error:', error);
+        console.error('❌ Error in registerDeviceToken:', error);
       }
     };
   
     if (user) {
-      initializePushNotification();
+      console.log('👤 User logged in, registering device token...');
+      registerDeviceToken();
     }
   }, [user]);
 
