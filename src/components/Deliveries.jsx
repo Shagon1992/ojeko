@@ -118,7 +118,7 @@ const getDefaultTemplate = (templateType) => {
       id: "default",
       template_type: "courier_to_customer",
       message:
-        "Selamat pagi, saya {nama_kurir} dari Ojek-O akan mengantarkan obat anda, dengan alamat {alamat_customer}, apa boleh di share lokasi agar lebih akurat??",
+        "Assalamu'alaiukum, saya {nama_kurir} dari Ojek-O akan mengantarkan obat anda, dengan alamat {alamat_customer}, apa boleh di share lokasi agar lebih akurat??",
     },
   };
 
@@ -990,6 +990,8 @@ const QuickCustomerForm = ({
         <MapPickerModal
           onCoordinateSelect={handleCoordinateSelect}
           onClose={() => setShowMapModal(false)}
+          existingLat={formData.lat}    // ✅ BARU
+          existingLng={formData.lng}    // ✅ BARU
         />
       )}
     </div>
@@ -3033,6 +3035,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
