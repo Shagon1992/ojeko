@@ -57,14 +57,22 @@ function MapClickHandler({ onPositionChange }) {
   return null;
 }
 
-const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
-  const [position, setPosition] = useState([-8.0989, 112.1684]);
+const MapPickerModal = ({ onCoordinateSelect, onClose, existingLat, existingLng }) => {
+  // 🔥 STATE BARU: Gunakan existing coordinates jika ada
+  const [position, setPosition] = useState(() => {
+    if (existingLat && existingLng) {
+      return [parseFloat(existingLat), parseFloat(existingLng)];
+    }
+    return [-8.0989, 112.1684]; // Default position
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
   const [mapError, setMapError] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationAccuracy, setLocationAccuracy] = useState(null);
+  const [hasExistingLocation, setHasExistingLocation] = useState(!!(existingLat && existingLng));
 
-  // Fungsi untuk mendapatkan lokasi user
+  // Fungsi untuk mendapatkan lokasi user dengan PRECISE LOCATION
   const getCurrentLocation = () => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -72,6 +80,7 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
         return;
       }
 
+      // 🔥 FORCE HIGH ACCURACY & PRECISE LOCATION
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           resolve({
@@ -84,22 +93,21 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
           let errorMessage = "Gagal mendapatkan lokasi";
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage =
-                "Izin lokasi ditolak. Izinkan akses lokasi di browser settings.";
+              errorMessage = "Izin lokasi presisi ditolak. Untuk akurasi terbaik, izinkan akses lokasi presisi di browser settings.";
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = "Informasi lokasi tidak tersedia.";
+              errorMessage = "GPS tidak tersedia. Pastikan GPS di HP Anda aktif.";
               break;
             case error.TIMEOUT:
-              errorMessage = "Request lokasi timeout.";
+              errorMessage = "Pencarian lokasi timeout. Pastikan GPS aktif dan dapat sinyal.";
               break;
           }
           reject(new Error(errorMessage));
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          enableHighAccuracy: true, // 🔥 FORCE GPS/PRECISE LOCATION
+          timeout: 15000, // 🔥 Lebih lama untuk GPS lock
+          maximumAge: 0, // 🔥 Jangan pakai cache
         }
       );
     });
@@ -119,14 +127,25 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
       setLocationAccuracy(location.accuracy);
       setPosition([location.lat, location.lng]);
 
-      console.log("Lokasi user ditemukan:", location);
+      console.log("📍 Lokasi presisi ditemukan:", location);
     } catch (error) {
-      console.log("Gagal dapat lokasi, pakai default:", error.message);
-      // Tetap pakai default position
+      console.log("Gagal dapat lokasi presisi:", error.message);
+      // Tetap pakai existing position atau default
       setUserLocation(null);
       setLocationAccuracy(null);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 🔥 FUNGSI BARU: Kembali ke lokasi sebelumnya (dari database)
+  const handleUsePreviousLocation = () => {
+    if (existingLat && existingLng) {
+      setPosition([parseFloat(existingLat), parseFloat(existingLng)]);
+      setLocationAccuracy(null); // Reset accuracy karena ini data lama
+      
+      // Beri feedback ke user
+      alert("🗺️ Kembali ke lokasi sebelumnya dari database");
     }
   };
 
@@ -139,24 +158,24 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
       setLocationAccuracy(location.accuracy);
       setPosition([location.lat, location.lng]);
 
-      // Beri feedback ke user
-      if (location.accuracy > 100) {
-        alert(
-          `📍 Lokasi ditemukan (akurasi ±${Math.round(
-            location.accuracy
-          )}m). \nGeser marker jika kurang akurat.`
-        );
+      // 🔥 FEEDBACK BERDASARKAN AKURASI
+      if (location.accuracy <= 20) {
+        alert(`🎯 LOKASI PRESISI! Akurasi ±${Math.round(location.accuracy)} meter`);
+      } else if (location.accuracy <= 50) {
+        alert(`✅ Lokasi cukup akurat (±${Math.round(location.accuracy)} meter)`);
+      } else {
+        alert(`📍 Lokasi ditemukan (akurasi ±${Math.round(location.accuracy)} meter). Geser marker jika kurang akurat.`);
       }
     } catch (error) {
-      alert("❌ Gagal refresh lokasi: " + error.message);
+      alert("❌ Gagal mendapatkan lokasi presisi: " + error.message);
+      
+      // 🔥 TAMPILKAN INSTRUKSI DETAIL JIKA GAGAL
+      if (error.message.includes("izin")) {
+        alert("📱 Cara mengaktifkan lokasi presisi:\n\n• Chrome: Settings → Site Settings → Location → Allow\n• Android: Settings → Location → High Accuracy Mode\n• Pastikan GPS dan Internet aktif");
+      }
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleConfirm = () => {
-    onCoordinateSelect(position[0].toFixed(6), position[1].toFixed(6));
-    onClose();
   };
 
   const handleManualInput = () => {
@@ -170,8 +189,21 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
     );
 
     if (lat && lng) {
-      setPosition([parseFloat(lat), parseFloat(lng)]);
+      const newLat = parseFloat(lat);
+      const newLng = parseFloat(lng);
+      
+      if (!isNaN(newLat) && !isNaN(newLng)) {
+        setPosition([newLat, newLng]);
+        setLocationAccuracy(null); // Manual input, tidak ada accuracy
+      } else {
+        alert("❌ Format koordinat tidak valid!");
+      }
     }
+  };
+
+  const handleConfirm = () => {
+    onCoordinateSelect(position[0].toFixed(6), position[1].toFixed(6));
+    onClose();
   };
 
   const renderMap = () => {
@@ -199,7 +231,16 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
               {locationAccuracy && (
                 <>
                   <br />
-                  Akurasi: ±{Math.round(locationAccuracy)}m
+                  🎯 Akurasi: ±{Math.round(locationAccuracy)}m
+                  {locationAccuracy <= 20 && " (PRESISI)"}
+                  {locationAccuracy > 20 && locationAccuracy <= 50 && " (BAIK)"}
+                  {locationAccuracy > 50 && " (SEDANG)"}
+                </>
+              )}
+              {hasExistingLocation && !locationAccuracy && (
+                <>
+                  <br />
+                  💾 Data dari database
                 </>
               )}
             </Popup>
@@ -288,36 +329,41 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
         {locationAccuracy && (
           <div
             style={{
-              background: locationAccuracy > 100 ? "#fef3c7" : "#d1fae5",
+              background: locationAccuracy > 50 ? "#fef3c7" : 
+                         locationAccuracy > 20 ? "#d1fae5" : "#dcfce7",
               padding: "8px 12px",
               borderRadius: "6px",
               marginBottom: "12px",
               fontSize: "12px",
               border: `1px solid ${
-                locationAccuracy > 100 ? "#f59e0b" : "#10b981"
+                locationAccuracy > 50 ? "#f59e0b" : 
+                locationAccuracy > 20 ? "#10b981" : "#16a34a"
               }`,
-              color: locationAccuracy > 100 ? "#92400e" : "#065f46",
+              color: locationAccuracy > 50 ? "#92400e" : 
+                     locationAccuracy > 20 ? "#065f46" : "#166534",
             }}
           >
-            {locationAccuracy > 100 ? (
+            {locationAccuracy > 50 ? (
               <>
-                ⚠️ <strong>Akurasi Sedang:</strong> ±
-                {Math.round(locationAccuracy)} meter
+                ⚠️ <strong>Akurasi Sedang:</strong> ±{Math.round(locationAccuracy)} meter
                 <br />
                 <span style={{ fontSize: "11px" }}>
                   Geser marker untuk posisi yang lebih akurat
                 </span>
               </>
+            ) : locationAccuracy > 20 ? (
+              <>
+                ✅ <strong>Akurasi Baik:</strong> ±{Math.round(locationAccuracy)} meter
+              </>
             ) : (
               <>
-                ✅ <strong>Akurasi Baik:</strong> ±
-                {Math.round(locationAccuracy)} meter
+                🎯 <strong>AKURASI PRESISI!</strong> ±{Math.round(locationAccuracy)} meter
               </>
             )}
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* 🔥 ACTION BUTTONS BARU */}
         <div
           style={{
             display: "flex",
@@ -326,6 +372,7 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             flexWrap: "wrap",
           }}
         >
+          {/* Tombol Refresh Lokasi Saya */}
           <button
             onClick={handleRefreshLocation}
             disabled={isLoading}
@@ -342,6 +389,8 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
               display: "flex",
               alignItems: "center",
               gap: "4px",
+              flex: 1,
+              minWidth: "140px",
             }}
           >
             {isLoading ? (
@@ -356,24 +405,56 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
                     animation: "spin 1s linear infinite",
                   }}
                 ></div>
-                Mendeteksi...
+                Mencari GPS...
               </>
             ) : (
               <>🔄 Refresh Lokasi Saya</>
             )}
           </button>
 
+          {/* 🔥 TOMBOL BARU: Lokasi Sebelumnya (muncul hanya jika ada data) */}
+          {hasExistingLocation && (
+            <button
+              onClick={handleUsePreviousLocation}
+              style={{
+                padding: "8px 12px",
+                background: "#8b5cf6",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "500",
+                cursor: "pointer",
+                flex: 1,
+                minWidth: "140px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                justifyContent: "center",
+              }}
+            >
+              💾 Lokasi Sebelumnya
+            </button>
+          )}
+
+          {/* Tombol Input Manual */}
           <button
             onClick={handleManualInput}
             style={{
               padding: "8px 12px",
-              background: "#8b5cf6",
+              background: "#10b981",
               color: "white",
               border: "none",
               borderRadius: "6px",
               fontSize: "12px",
               fontWeight: "500",
               cursor: "pointer",
+              flex: 1,
+              minWidth: "120px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              justifyContent: "center",
             }}
           >
             ✏️ Input Manual
@@ -414,7 +495,10 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
                 }}
               ></div>
               <div style={{ color: "#64748b", fontSize: "14px" }}>
-                Mendeteksi lokasi Anda...
+                🔍 Mencari lokasi presisi Anda...
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: "12px", textAlign: "center" }}>
+                Pastikan GPS aktif dan dapat sinyal
               </div>
             </div>
           ) : (
@@ -433,9 +517,16 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             color: "#64748b",
           }}
         >
-          <strong>📍 Koordinat Terpilih:</strong>
+          <strong>
+            {hasExistingLocation && !locationAccuracy ? "💾 Lokasi Database:" : "📍 Lokasi Terpilih:"}
+          </strong>
           <br />
           Lat: {position[0].toFixed(6)}, Lng: {position[1].toFixed(6)}
+          {hasExistingLocation && !locationAccuracy && (
+            <div style={{ fontSize: "12px", color: "#8b5cf6", marginTop: "4px" }}>
+              💡 Klik "Refresh Lokasi Saya" untuk update ke posisi terkini
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -487,6 +578,8 @@ const MapPickerModal = ({ onCoordinateSelect, onClose }) => {
             }}
           >
             💡 Klik di map untuk pindah lokasi • Drag marker untuk posisi akurat
+            <br />
+            🎯 Untuk akurasi terbaik, aktifkan GPS dan izinkan akses lokasi presisi
           </div>
         )}
       </div>
