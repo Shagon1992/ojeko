@@ -1310,6 +1310,8 @@ const CustomerFormModal = ({
         <MapPickerModal
           onCoordinateSelect={handleCoordinateSelect}
           onClose={() => setShowMapModal(false)}
+          existingLat={formData.lat}    // ✅ BARU
+          existingLng={formData.lng}    // ✅ BARU
         />
       )}
     </div>
@@ -2011,6 +2013,7 @@ const Customers = () => {
 };
 
 export default Customers;
+
 
 
 
