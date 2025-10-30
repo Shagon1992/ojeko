@@ -17,7 +17,8 @@
     "react-leaflet": "^4.2.1",  
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0", 
-    "file-saver": "^2.0.5"
+    "file-saver": "^2.0.5",
+    "react-onesignal": "^1.0.6"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
