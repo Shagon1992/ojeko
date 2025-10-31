@@ -21,6 +21,73 @@ function App() {
   // 🎯 PERBAIKAN: Definisikan isAdmin di sini
   const isAdmin = user?.role === "admin";
 
+  // 🔥 SERVICE WORKER REGISTRATION FOR PWA
+  useEffect(() => {
+    const registerServiceWorker = async () => {
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          console.log('✅ Service Worker registered:', registration);
+          
+          // Check if app is installed as PWA
+          if (window.matchMedia('(display-mode: standalone)').matches) {
+            console.log('📱 App running as PWA');
+          }
+        } catch (error) {
+          console.error('❌ Service Worker registration failed:', error);
+        }
+      }
+    };
+
+    // Show install prompt for PWA
+    const handleInstallPrompt = (e) => {
+      e.preventDefault();
+      
+      // Create install button
+      const installButton = document.createElement('button');
+      installButton.innerHTML = '📱 INSTALL APLIKASI';
+      installButton.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #8b5cf6;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      `;
+      
+      installButton.onclick = async () => {
+        e.prompt();
+        installButton.remove();
+      };
+      
+      document.body.appendChild(installButton);
+      
+      // Auto remove after 10 seconds
+      setTimeout(() => {
+        if (document.body.contains(installButton)) {
+          installButton.remove();
+        }
+      }, 10000);
+    };
+
+    // Register service worker
+    registerServiceWorker();
+
+    // Listen for install prompt
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+    };
+  }, []);
+
   // 🔥 SIMPLE NOTIFICATION SETUP - TANPA ONESIGNAL COMPLEX
   useEffect(() => {
     const setupSimpleNotifications = () => {
