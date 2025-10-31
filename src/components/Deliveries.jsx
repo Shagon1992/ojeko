@@ -1130,18 +1130,46 @@ const DeliveryCard = ({
   };
   
   // 🔥 TAMBAHKAN FUNCTION INI DI DALAM DELIVERYCARD COMPONENT
-  const sendNotificationToCourier = async (courierId, customerName) => {
+  const sendNotificationToCourier = async (courierId, customerName, orderType = "baru") => {
     try {
-      // Test browser notification
+      // 1. BROWSER NOTIFICATION (saat app terbuka)
       if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("📦 ORDER BARU - Ojek-O", {
-          body: `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`,
+        const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
+        const body = orderType === "baru" 
+          ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
+          : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
+  
+        new Notification(title, {
+          body: body,
           icon: "/icons/icon-192x192.png",
           tag: "new-order"
         });
       }
+  
+      // 2. PWA PUSH NOTIFICATION (via Service Worker)
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(
+          orderType === "baru" ? "📦 ORDER BARU - Ojek-O" : "🔄 ORDER DITUGASKAN - Ojek-O",
+          {
+            body: orderType === "baru" 
+              ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
+              : `Anda ditugaskan untuk: ${customerName}. Segera proses!`,
+            icon: "/icons/icon-192x192.png",
+            badge: "/icons/icon-192x192.png",
+            tag: "delivery-notification",
+            requireInteraction: true,
+            actions: [
+              {
+                action: "open",
+                title: "📱 Buka Aplikasi"
+              }
+            ]
+          }
+        );
+      }
       
-      console.log('✅ Notification sent to courier:', courierId);
+      console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
     } catch (error) {
       console.error('❌ Send notification error:', error);
     }
@@ -3097,6 +3125,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
