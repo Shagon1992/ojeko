@@ -16,143 +16,8 @@ import {
   updateDeliveryCourier,
   deleteDelivery,
 } from "../lib/deliveries";
-// CSS untuk Leaflet
 import "leaflet/dist/leaflet.css";
 import MapPickerModal from "./MapPickerModal";
-
-// =============================================
-// 🔥 ENHANCED NOTIFICATION FUNCTIONS - TAMBAHKAN DI BAWAH IMPORTS
-// =============================================
-// 🔥 ENHANCED NOTIFICATION FUNCTION - TANPA DATABASE
-const sendEnhancedNotification = async (courierId, customerName, orderType = "baru") => {
-  try {
-    const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
-    const body = orderType === "baru" 
-      ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
-      : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
-
-    // 1. Browser Notification (saat app terbuka)
-    if ("Notification" in window) {
-      if (Notification.permission === "granted") {
-        new Notification(title, {
-          body: body,
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/icon-192x192.png",
-          tag: "new-order",
-          requireInteraction: true
-        });
-      } else if (Notification.permission === "default") {
-        // Auto request permission jika belum
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          new Notification(title, {
-            body: body,
-            icon: "/icons/icon-192x192.png",
-            tag: "new-order"
-          });
-        }
-      }
-    }
-
-    // 2. PWA Push Notification via Service Worker
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        
-        await registration.showNotification(title, {
-          body: body,
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/icon-192x192.png",
-          tag: "delivery-notification",
-          requireInteraction: true,
-          actions: [
-            {
-              action: "open",
-              title: "📱 Buka Aplikasi"
-            }
-          ]
-        });
-        
-        console.log('✅ PWA Notification sent via Service Worker');
-      } catch (swError) {
-        console.log('ℹ️ Service Worker notification failed, using browser fallback');
-        
-        // Fallback ke browser notification
-        if (Notification.permission === "granted") {
-          new Notification(title, {
-            body: body + " (Fallback)",
-            icon: "/icons/icon-192x192.png",
-            tag: "new-order-fallback"
-          });
-        }
-      }
-    }
-    
-    console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
-    
-  } catch (error) {
-    console.error('❌ Notification error:', error);
-    
-    // Ultimate fallback - alert sederhana
-    if (orderType === "baru") {
-      alert(`📦 ORDER BARU: ${customerName}`);
-    } else {
-      alert(`🔄 ORDER DITUGASKAN: ${customerName}`);
-    }
-  }
-};
-
-
-// 🔥 PWA PUSH NOTIFICATION - SIMPLE & WORK
-const sendPwaNotification = async (customerName, orderType = "baru") => {
-  try {
-    const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
-    const body = orderType === "baru" 
-      ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
-      : `Anda ditugaskan untuk: ${customerName}. Segera proses!`;
-
-    // 1. Coba Service Worker PWA dulu
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        
-        await registration.showNotification(title, {
-          body: body,
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/icon-192x192.png",
-          tag: "pwa-delivery",
-          requireInteraction: true,
-          actions: [
-            {
-              action: "open",
-              title: "📱 Buka Aplikasi"
-            }
-          ]
-        });
-        
-        console.log('✅ PWA Push Notification Sent!');
-        return; // Berhasil, keluar dari fungsi
-      } catch (swError) {
-        console.log('❌ PWA Notification failed, try browser fallback');
-      }
-    }
-
-    // 2. Fallback ke Browser Notification
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(title, {
-        body: body,
-        icon: "/icons/icon-192x192.png"
-      });
-      console.log('✅ Browser Notification Sent!');
-    } else {
-      console.log('❌ No notification support');
-    }
-    
-  } catch (error) {
-    console.error('❌ Notification error:', error);
-  }
-};
-
 
 // =============================================
 // KONSTANTA & FUNGSI OSRM UNTUK DELIVERIES
@@ -167,8 +32,6 @@ const RS_AMINAH_COORDINATES = {
 // Fungsi hitung jarak dengan OSRM - FIXED ADDITION +0.3km
 const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
   try {
-    console.log("Menghitung jarak dari:", RS_AMINAH_COORDINATES, "ke:", customerLat, customerLng);
-    
     const response = await fetch(
       `https://router.project-osrm.org/route/v1/driving/` +
       `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
@@ -179,7 +42,6 @@ const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
     }
     
     const data = await response.json();
-    console.log("OSRM Response:", data);
     
     if (data.routes && data.routes[0]) {
       const distanceMeters = data.routes[0].distance;
@@ -191,8 +53,6 @@ const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
       // 🔥 JARAK MINIMAL 1 KM
       const finalDistanceKm = Math.max(parseFloat(correctedDistanceKm), 1.0).toFixed(2);
       
-      console.log(`Jarak OSRM: ${distanceKm} km → +0.5km: ${correctedDistanceKm} km → Final (min 1km): ${finalDistanceKm} km`);
-      
       return parseFloat(finalDistanceKm);
     } else if (data.code === "NoRoute") {
       throw new Error("Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid.");
@@ -200,7 +60,6 @@ const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
       throw new Error("Gagal menghitung jarak. Response OSRM tidak valid.");
     }
   } catch (error) {
-    console.error("OSRM error:", error);
     throw new Error(`Gagal menghitung jarak: ${error.message}`);
   }
 };
@@ -222,13 +81,11 @@ const fetchSingleTemplate = async (templateType) => {
       .single();
 
     if (error) {
-      // Jika template tidak ditemukan, return template default
       return getDefaultTemplate(templateType);
     }
 
     return data;
   } catch (error) {
-    console.error("Error fetching template:", error);
     return getDefaultTemplate(templateType);
   }
 };
@@ -1124,8 +981,8 @@ const QuickCustomerForm = ({
         <MapPickerModal
           onCoordinateSelect={handleCoordinateSelect}
           onClose={() => setShowMapModal(false)}
-          existingLat={formData.lat}    // ✅ BARU
-          existingLng={formData.lng}    // ✅ BARU
+          existingLat={formData.lat}
+          existingLng={formData.lng}
         />
       )}
     </div>
@@ -1249,17 +1106,10 @@ const DeliveryCard = ({
     if (!konfirmasi) return;
   
     try {
-      // 🔥 PANGGIL FUNGSI DARI PARENT TANPA SETSHOWMODAL
       const success = await onUpdateCourier(delivery.id, selectedCourier);
       
       if (success) {
-        
-      // 🔥 PANGGIL NOTIFICATION SEDERHANA
-      await sendPwaNotification(delivery.customers?.name, "ditugaskan");
-      setShowCourierModal(false);
-      alert(`Kurir berhasil diganti menjadi ${courier.name}`);
-        
-        setShowCourierModal(false); // 🔥 INI BARU DIPANGGIL
+        setShowCourierModal(false);
         alert(`Kurir berhasil diganti menjadi ${courier.name}`);
       }
     } catch (error) {
@@ -1267,8 +1117,6 @@ const DeliveryCard = ({
     }
   };
 
-
-  
   const handleKirimObat = () => {
     const konfirmasi = confirm("Apakah anda akan mengirim obat ini?");
     if (konfirmasi) {
@@ -1317,7 +1165,6 @@ const DeliveryCard = ({
       if (konfirmasi) {
         setCustomerToEdit(delivery.customers);
         setShowCustomerForm(true);
-        // 🔥 TIDAK PERLU APA-APA DI SINI - biarkan state berubah dan render QuickCustomerForm
       }
       return;
     }
@@ -1367,7 +1214,6 @@ const DeliveryCard = ({
         }, 500);
       }
     } catch (error) {
-      console.error("Error updating customer:", error);
       alert("Error: " + error.message);
     }
   };
@@ -1451,7 +1297,7 @@ const DeliveryCard = ({
               gap: "4px",
               justifyContent: "center",
             }}
-          >
+            >
             ✏️ Edit Customer
           </button>
         )}
@@ -1921,30 +1767,6 @@ const Deliveries = () => {
   const currentUser = JSON.parse(localStorage.getItem("user"));
   const isAdmin = currentUser?.role === "admin";
 
-  // 🔥 FUNCTION UNTUK SEMUA NOTIFICATION
-  const sendNotificationToCourier = async (courierId, customerName, orderType = "baru") => {
-    try {
-      // Test browser notification
-      if ("Notification" in window && Notification.permission === "granted") {
-        const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
-        const body = orderType === "baru" 
-          ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
-          : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
-
-        new Notification(title, {
-          body: body,
-          icon: "/icons/icon-192x192.png",
-          tag: "new-order"
-        });
-      }
-      
-      console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
-    } catch (error) {
-      console.error('❌ Send notification error:', error);
-    }
-  };
-  
-
   // FUNGSI BARU: Debounced search customer
   const handleCustomerSearch = (searchTerm) => {
     setCustomerSearch(searchTerm);
@@ -1970,7 +1792,6 @@ const Deliveries = () => {
       try {
         await performSearch(searchTerm.trim());
       } catch (error) {
-        console.error("Search error:", error);
         setSearchError("Error saat mencari customer");
       } finally {
         setSearchLoading(false);
@@ -2022,10 +1843,9 @@ const Deliveries = () => {
   // EFFECT BARU: Refresh search results ketika deliveries berubah
   useEffect(() => {
     if (customerSearch && hasSearched) {
-      // Jika sedang dalam state pencarian, refresh results
       performSearch(customerSearch);
     }
-  }, [deliveries, customerSearch, hasSearched]); // 🔥 TAMBAHKAN DEPENDENCIES
+  }, [deliveries, customerSearch, hasSearched]);
 
   // EFFECT UNTUK CLEANUP
   useEffect(() => {
@@ -2052,7 +1872,6 @@ const Deliveries = () => {
         .order("name");
       setCouriers(couriersData || []);
     } catch (error) {
-      console.error("Error fetching data:", error);
       alert("Error fetching data: " + error.message);
     } finally {
       setLoading(false);
@@ -2060,7 +1879,6 @@ const Deliveries = () => {
   };
 
   // Filter deliveries based on active tab
-  // 🔥 PASTIKAN fungsi filter sudah benar
   const getFilteredDeliveries = () => {
     const today = new Date().toISOString().split("T")[0];
     let filtered = deliveries;
@@ -2107,7 +1925,6 @@ const Deliveries = () => {
   const filteredDeliveries = getFilteredDeliveries();
 
   // Count orders per tab
-  // 🔥 PERBAIKAN: Fungsi hitung orderan yang menyesuaikan dengan showAllOrders
   const getOrderCount = (tab) => {
     const today = new Date().toISOString().split("T")[0];
     let filtered = deliveries;
@@ -2164,13 +1981,6 @@ const Deliveries = () => {
   
       if (error) throw error;
   
-      // 🔥 ENHANCED NOTIFICATION JIKA ADA KURIR
-      // 🔥 PANGGIL NOTIFICATION SEDERHANA
-      if (deliveryFormData.courier_id) {
-        const customer = searchResults.find(c => c.id === deliveryFormData.customer_id);
-        await sendPwaNotification(customer?.name, "baru");
-      }
-  
       alert("Delivery berhasil dibuat!");
       setShowCreateForm(false);
       setDeliveryFormData({ customer_id: "", courier_id: "", notes: "" });
@@ -2195,15 +2005,8 @@ const Deliveries = () => {
   const handleUpdateCourier = async (deliveryId, courierId) => {
     try {
       await updateDeliveryCourier(deliveryId, courierId);
-  
-      // 🔥 ENHANCED NOTIFICATION
-      const delivery = deliveries.find(d => d.id === deliveryId);
-      if (delivery && courierId) {
-        await sendEnhancedNotification(courierId, delivery.customers?.name, "ditugaskan");
-      }
-        
-      fetchData(); // Refresh data saja
-      return true; // Beri return value
+      fetchData();
+      return true;
     } catch (error) {
       alert("Error: " + error.message);
       return false;
@@ -2251,14 +2054,12 @@ const Deliveries = () => {
       fetchData();
       return true;
     } catch (error) {
-      console.error("Error updating customer:", error);
       alert("Error: " + error.message);
       return false;
     }
   };
 
   // Save customer (create or update)
-  // FUNGSI BARU: Save customer (create or update) - VERSION FIXED
   const handleSaveCustomer = async (customerData) => {
     try {
       const preparedData = {
@@ -2305,20 +2106,19 @@ const Deliveries = () => {
             ...prev,
             customer_id: data.id,
           }));
-          setCustomerSearch(data.name); // Set nama customer di search box
-          setSearchResults([data]); // Tampilkan customer baru di results
-          setHasSearched(true); // Tampilkan hasil pencarian
+          setCustomerSearch(data.name);
+          setSearchResults([data]);
+          setHasSearched(true);
         }
       }
 
       // Refresh data dan reset state
       setShowCustomerForm(false);
       setEditingCustomer(null);
-      fetchData(); // Refresh deliveries data
+      fetchData();
 
       return newCustomerId;
     } catch (error) {
-      console.error("Error saving customer:", error);
       alert("Error: " + error.message);
       return null;
     }
@@ -3221,7 +3021,3 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
-
-
-
-
