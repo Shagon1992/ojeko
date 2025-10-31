@@ -27,12 +27,12 @@
     <!-- ✅ TITLE -->
     <title>Ojek-O App</title>
 
-    <!-- 🔥 ONESIGNAL PUSH NOTIFICATION -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <!-- 🔥 ONESIGNAL - UPDATED VERSION -->
+    <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" defer></script>
     <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
+      window.OneSignal = window.OneSignal || [];
+      OneSignal.push(function() {
+        OneSignal.init({
           appId: "3a700cc3-8ebb-43ed-b453-06f6ba021c59",
         });
       });
