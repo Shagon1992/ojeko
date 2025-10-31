@@ -10,7 +10,6 @@ import ImportCustomers from "./components/ImportCustomers";
 import Settings from "./components/Settings/Settings";
 import "./App.css";
 
-// 🔥 IMPORT SUPABASE SAJA - HAPUS ONESIGNAL
 import { supabase } from "./lib/supabase";
 
 function App() {
@@ -18,32 +17,13 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const user = JSON.parse(localStorage.getItem("user"));
 
-  // 🎯 PERBAIKAN: Definisikan isAdmin di sini
   const isAdmin = user?.role === "admin";
 
-  // 🔥 SERVICE WORKER REGISTRATION FOR PWA
+  // Simple PWA Install Prompt
   useEffect(() => {
-    const registerServiceWorker = async () => {
-      if ('serviceWorker' in navigator) {
-        try {
-          const registration = await navigator.serviceWorker.register('/sw.js');
-          console.log('✅ Service Worker registered:', registration);
-          
-          // Check if app is installed as PWA
-          if (window.matchMedia('(display-mode: standalone)').matches) {
-            console.log('📱 App running as PWA');
-          }
-        } catch (error) {
-          console.error('❌ Service Worker registration failed:', error);
-        }
-      }
-    };
-
-    // Show install prompt for PWA
     const handleInstallPrompt = (e) => {
       e.preventDefault();
       
-      // Create install button
       const installButton = document.createElement('button');
       installButton.innerHTML = '📱 INSTALL APLIKASI';
       installButton.style.cssText = `
@@ -69,7 +49,6 @@ function App() {
       
       document.body.appendChild(installButton);
       
-      // Auto remove after 10 seconds
       setTimeout(() => {
         if (document.body.contains(installButton)) {
           installButton.remove();
@@ -77,224 +56,12 @@ function App() {
       }, 10000);
     };
 
-    // Register service worker
-    registerServiceWorker();
-
-    // Listen for install prompt
     window.addEventListener('beforeinstallprompt', handleInstallPrompt);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
     };
   }, []);
-
-  // 🔥 ENHANCED NOTIFICATION SETUP
-  // 🔥 ENHANCED NOTIFICATION SETUP
-  useEffect(() => {
-    const setupEnhancedNotifications = async () => {
-      const currentUser = JSON.parse(localStorage.getItem("user"));
-      if (!currentUser?.courier_id) return;
-  
-      console.log('👤 Setting up enhanced notifications for courier:', currentUser.courier_id);
-  
-      // 1. Service Worker Registration
-      if ('serviceWorker' in navigator) {
-        try {
-          // Unregister existing service workers first
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (let registration of registrations) {
-            await registration.unregister();
-            console.log('🗑️ Unregistered old service worker');
-          }
-  
-          // Register new service worker
-          const registration = await navigator.serviceWorker.register('/sw.js', {
-            scope: '/',
-            updateViaCache: 'none'
-          });
-          
-          console.log('✅ Service Worker registered:', registration);
-  
-          // Wait for service worker to be ready
-          await navigator.serviceWorker.ready;
-          console.log('✅ Service Worker ready');
-  
-        } catch (error) {
-          console.error('❌ Service Worker registration failed:', error);
-        }
-      }
-  
-      // 2. Notification Permission
-      if (!("Notification" in window)) {
-        console.log("❌ Browser tidak support notifications");
-        return;
-      }
-  
-      // 3. Permission Handling dengan Enhanced UX
-      if (Notification.permission === "granted") {
-        console.log('✅ Notifications already enabled');
-        await registerCourierDevice(currentUser.courier_id);
-        showNotificationWelcome(currentUser.courier_id);
-      } else if (Notification.permission === "default") {
-        // Tampilkan enhanced permission button
-        setTimeout(() => {
-          showEnhancedPermissionButton(currentUser.courier_id);
-        }, 2000);
-      }
-    };
-  
-    const showEnhancedPermissionButton = (courierId) => {
-      if (document.getElementById('notification-permission-btn')) return;
-  
-      const button = document.createElement('button');
-      button.id = 'notification-permission-btn';
-      button.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span>🔔</span>
-          <span>AKTIFKAN NOTIFIKASI ORDERAN</span>
-        </div>
-        <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
-          Dapatkan pemberitahuan orderan baru secara real-time
-        </div>
-      `;
-      button.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        border: none;
-        padding: 16px 20px;
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        z-index: 10000;
-        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
-        max-width: 280px;
-        text-align: left;
-        transition: all 0.3s ease;
-      `;
-  
-      button.onclick = async () => {
-        button.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="spinner" style="width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span>MEMPROSES...</span>
-          </div>
-        `;
-        button.style.background = '#6b7280';
-        button.style.cursor = 'not-allowed';
-        
-        try {
-          const permission = await Notification.requestPermission();
-          
-          if (permission === "granted") {
-            console.log('✅ Notification permission granted');
-            await registerCourierDevice(courierId);
-            
-            button.innerHTML = `
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span>✅</span>
-                <span>NOTIFIKASI AKTIF!</span>
-              </div>
-              <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
-                Anda akan dapat pemberitahuan orderan
-              </div>
-            `;
-            button.style.background = '#059669';
-            
-            // Show welcome notification
-            showNotificationWelcome(courierId);
-            
-            setTimeout(() => button.remove(), 3000);
-          } else {
-            button.innerHTML = `
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span>🔔</span>
-                <span>IZINKAN NOTIFIKASI</span>
-              </div>
-              <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
-                  Klik "Izinkan" saat diminta browser
-              </div>
-            `;
-            button.style.background = '#10b981';
-            button.style.cursor = 'pointer';
-            
-            alert('❌ Silakan izinkan notifikasi untuk mendapatkan pemberitahuan orderan baru. Klik ikon gembok/gembok di address bar browser Anda dan izinkan notifikasi.');
-          }
-        } catch (error) {
-          console.error('Permission error:', error);
-          button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
-          button.style.background = '#10b981';
-          button.style.cursor = 'pointer';
-        }
-      };
-  
-      // Hover effects
-      button.onmouseenter = () => {
-        if (!button.innerHTML.includes('MEMPROSES')) {
-          button.style.transform = 'translateY(-2px)';
-          button.style.boxShadow = '0 12px 30px rgba(16, 185, 129, 0.4)';
-        }
-      };
-      
-      button.onmouseleave = () => {
-        button.style.transform = 'translateY(0)';
-        button.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.3)';
-      };
-  
-      document.body.appendChild(button);
-      console.log('✅ Enhanced notification permission button displayed');
-    };
-  
-    const showNotificationWelcome = (courierId) => {
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("🎉 Notifikasi Ojek-O Aktif!", {
-          body: "Anda akan mendapatkan pemberitahuan orderan baru secara real-time. Selamat bekerja!",
-          icon: "/icons/icon-192x192.png",
-          tag: "welcome",
-          requireInteraction: true
-        });
-      }
-    };
-  
-    const registerCourierDevice = async (courierId) => {
-      try {
-        const deviceToken = `browser-${courierId}-${Date.now()}`;
-        
-        const { error } = await supabase
-          .from('courier_devices')
-          .upsert({
-            courier_id: courierId,
-            device_token: deviceToken,
-            platform: 'web',
-            is_active: true,
-            last_active: new Date().toISOString()
-          }, {
-            onConflict: 'courier_id,device_token'
-          });
-  
-        if (error) {
-          console.error('❌ Device registration error:', error);
-        } else {
-          console.log('✅ Device registered in database');
-          
-          // Simpan device token di localStorage untuk penggunaan berikutnya
-          localStorage.setItem('device_token', deviceToken);
-        }
-      } catch (error) {
-        console.error('❌ Device registration error:', error);
-      }
-    };
-  
-    if (user) {
-      console.log('👤 User logged in, setting up enhanced notifications...');
-      setupEnhancedNotifications();
-    }
-  }, [user]);
-
-
 
   // Close mobile menu when resizing to desktop
   useEffect(() => {
