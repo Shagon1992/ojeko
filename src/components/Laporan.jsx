@@ -395,6 +395,8 @@ const Laporan = () => {
             { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
             { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } },
             ...(!isAdmin ? [{ s: { r: 3, c: 0 }, e: { r: 3, c: 5 } }] : []),
+
+            { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } },
             
             // 🔥 PERBAIKAN: Merge "Matrix" (A6+B6)
             { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
@@ -410,14 +412,14 @@ const Laporan = () => {
   
           // Tambahkan merge untuk kinerja kurir jika admin
           if (isAdmin && reportData.courierPerformance.length > 0) {
-            const courierHeaderRow = isAdmin ? 11 : 10;
+            const courierHeaderRow = isAdmin ? 12 : 10;
             merges.push({ s: { r: courierHeaderRow, c: 0 }, e: { r: courierHeaderRow, c: 3 } });
           }
   
           // Tambahkan merge untuk detail pengiriman
           const detailHeaderRow = isAdmin 
-            ? (13 + reportData.courierPerformance.length)
-            : 12;
+            ? (17 + reportData.courierPerformance.length)
+            : 10;
           merges.push({ s: { r: detailHeaderRow, c: 0 }, e: { r: detailHeaderRow, c: 5 } });
   
           worksheet["!merges"] = merges;
@@ -563,7 +565,7 @@ const Laporan = () => {
               let detailHeaderRow;
               
               if (isAdmin) {
-                const courierHeaderRow = 13; // posisi header tabel kinerja kurir
+                const courierHeaderRow = 15; // posisi header tabel kinerja kurir
                 const courierDataCount = reportData.courierPerformance.length;
               
                 // Header detail pengiriman muncul 2 baris setelah data kurir terakhir
@@ -1720,6 +1722,7 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
 
 
