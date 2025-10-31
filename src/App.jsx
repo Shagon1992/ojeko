@@ -23,7 +23,7 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   // 🔥 ONESIGNAL INITIALIZATION
-  // 🔥 ONESIGNAL - SIMPLE & MODERN VERSION
+  // 🔥 ONESIGNAL - WITH MANUAL PERMISSION BUTTON
   useEffect(() => {
     const registerDeviceToken = () => {
       try {
@@ -56,7 +56,9 @@ function App() {
                   console.log('✅ Device token successfully registered!');
                 }
               } else {
-                console.log('⏳ User ID not available (user mungkin belum allow notification)');
+                console.log('⏳ User ID not available - user perlu allow notification');
+                // Tampilkan button untuk minta permission manual
+                showPermissionButton(currentUser.courier_id);
               }
             });
           } else if (retryCount < 10) {
@@ -71,6 +73,71 @@ function App() {
         
       } catch (error) {
         console.error('❌ Device registration error:', error);
+      }
+    };
+  
+    const showPermissionButton = (courierId) => {
+      // Cek jika button sudah ada
+      if (document.getElementById('onesignal-permission-button')) return;
+      
+      const button = document.createElement('button');
+      button.id = 'onesignal-permission-button';
+      button.innerHTML = '🔔 Aktifkan Notifikasi Orderan';
+      button.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      `;
+      
+      button.onclick = async () => {
+        try {
+          console.log('🎯 Requesting notification permission...');
+          await window.OneSignal.registerForPushNotifications();
+          
+          // Tunggu dan cek lagi setelah permission granted
+          setTimeout(() => {
+            window.OneSignal.getUserId().then(async (userId) => {
+              if (userId) {
+                await saveDeviceToken(userId, courierId);
+                button.remove();
+              }
+            });
+          }, 2000);
+          
+        } catch (error) {
+          console.error('❌ Permission request failed:', error);
+          alert('Gagal meminta izin notifikasi. Pastikan browser mengizinkan notifikasi.');
+        }
+      };
+      
+      document.body.appendChild(button);
+    };
+  
+    const saveDeviceToken = async (deviceId, courierId) => {
+      const { error } = await supabase
+        .from('courier_devices')
+        .upsert({
+          courier_id: courierId,
+          device_token: deviceId,
+          platform: 'web',
+          is_active: true
+        }, { onConflict: 'courier_id,device_token' });
+  
+      if (error) {
+        console.error('❌ Database error:', error);
+      } else {
+        console.log('✅ Device token successfully registered!');
+        alert('✅ Notifikasi berhasil diaktifkan! Anda akan dapat pemberitahuan orderan baru.');
       }
     };
   
