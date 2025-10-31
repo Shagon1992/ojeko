@@ -23,7 +23,7 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   // 🔥 ONESIGNAL INITIALIZATION
-  // 🔥 ONESIGNAL - DIRECT APPROACH VERSION
+  // 🔥 ONESIGNAL - SIMPLE & MODERN VERSION
   useEffect(() => {
     const registerDeviceToken = () => {
       try {
@@ -32,75 +32,45 @@ function App() {
   
         console.log('👤 Starting device registration...');
   
-        if (window.OneSignalDeferred) {
-          window.OneSignalDeferred.push(async function(OneSignal) {
-            try {
-              console.log('🎯 OneSignal SDK ready, checking subscription...');
+        // Tunggu sampai OneSignal ready
+        const checkOneSignal = (retryCount = 0) => {
+          if (window.OneSignal && typeof window.OneSignal.getUserId === 'function') {
+            console.log('🎯 OneSignal ready, getting user ID...');
+            
+            window.OneSignal.getUserId().then(async (userId) => {
+              console.log('📱 OneSignal User ID:', userId);
               
-              // Tunggu sampai OneSignal fully initialized
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              // Cara langsung cek subscription status
-              const subscriptionState = await OneSignal.isPushNotificationsEnabled();
-              console.log('📱 Push enabled:', subscriptionState);
-              
-              if (subscriptionState) {
-                // User sudah subscribed, dapatkan player ID
-                const playerId = await OneSignal.getPlayerId();
-                console.log('🎯 Player ID:', playerId);
-                
-                if (playerId) {
-                  await saveDeviceToken(playerId, currentUser.courier_id);
+              if (userId) {
+                const { error } = await supabase
+                  .from('courier_devices')
+                  .upsert({
+                    courier_id: currentUser.courier_id,
+                    device_token: userId,
+                    platform: 'web',
+                    is_active: true
+                  }, { onConflict: 'courier_id,device_token' });
+  
+                if (error) {
+                  console.error('❌ Database error:', error);
+                } else {
+                  console.log('✅ Device token successfully registered!');
                 }
               } else {
-                console.log('⏳ User not subscribed to push notifications');
-                console.log('💡 User perlu allow notification permission');
+                console.log('⏳ User ID not available (user mungkin belum allow notification)');
               }
-            } catch (error) {
-              console.error('❌ OneSignal error:', error);
-              console.log('🔧 Trying alternative method...');
-              tryAlternativeMethod(currentUser.courier_id);
-            }
-          });
-        }
+            });
+          } else if (retryCount < 10) {
+            console.log(`🔄 Waiting for OneSignal... (${retryCount + 1}/10)`);
+            setTimeout(() => checkOneSignal(retryCount + 1), 1000);
+          } else {
+            console.error('❌ OneSignal timeout');
+          }
+        };
+  
+        checkOneSignal();
+        
       } catch (error) {
         console.error('❌ Device registration error:', error);
-      }
-    };
-  
-    const tryAlternativeMethod = async (courierId) => {
-      try {
-        // Coba access langsung dari global OneSignal instance
-        if (window.OneSignal) {
-          const oneSignal = window.OneSignal;
-          const playerId = await oneSignal.getPlayerId();
-          console.log('🎯 Player ID (alternative):', playerId);
-          
-          if (playerId) {
-            await saveDeviceToken(playerId, courierId);
-          }
-        }
-      } catch (error) {
-        console.error('❌ Alternative method failed:', error);
-      }
-    };
-  
-    const saveDeviceToken = async (deviceId, courierId) => {
-      const { error } = await supabase
-        .from('courier_devices')
-        .upsert({
-          courier_id: courierId,
-          device_token: deviceId,
-          platform: 'web',
-          is_active: true
-        }, { onConflict: 'courier_id,device_token' });
-  
-      if (error) {
-        console.error('❌ Database error:', error);
-      } else {
-        console.log('✅ Device token successfully registered!');
-        console.log('📱 Device ID:', deviceId);
-        console.log('👤 Courier ID:', courierId);
       }
     };
   
