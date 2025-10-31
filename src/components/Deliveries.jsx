@@ -1117,8 +1117,10 @@ const DeliveryCard = ({
     try {
       await onUpdateCourier(delivery.id, selectedCourier);
       
-      // 🔥 KIRIM NOTIFICATION SETELAS BERHASIL GANTI KURIR
-      await sendNotificationToCourier(selectedCourier, delivery.customers?.name);
+    // 🔥 PAKAI FUNCTION DARI PARENT
+    if (onSendNotification) {
+      await onSendNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
+    }
       
       setShowCourierModal(false);
       alert(`Kurir berhasil diganti menjadi ${courier.name}`);
@@ -1797,6 +1799,30 @@ const Deliveries = () => {
   const currentUser = JSON.parse(localStorage.getItem("user"));
   const isAdmin = currentUser?.role === "admin";
 
+  // 🔥 FUNCTION UNTUK SEMUA NOTIFICATION
+  const sendNotificationToCourier = async (courierId, customerName, orderType = "baru") => {
+    try {
+      // Test browser notification
+      if ("Notification" in window && Notification.permission === "granted") {
+        const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
+        const body = orderType === "baru" 
+          ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
+          : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
+
+        new Notification(title, {
+          body: body,
+          icon: "/icons/icon-192x192.png",
+          tag: "new-order"
+        });
+      }
+      
+      console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
+    } catch (error) {
+      console.error('❌ Send notification error:', error);
+    }
+  };
+  
+
   // FUNGSI BARU: Debounced search customer
   const handleCustomerSearch = (searchTerm) => {
     setCustomerSearch(searchTerm);
@@ -2016,6 +2042,12 @@ const Deliveries = () => {
 
       if (error) throw error;
 
+      // 🔥 KIRIM NOTIFICATION JIKA ADA KURIR
+      if (deliveryFormData.courier_id) {
+        const customer = searchResults.find(c => c.id === deliveryFormData.customer_id);
+        await sendNotificationToCourier(deliveryFormData.courier_id, customer?.name, "baru");
+      }
+
       alert("Delivery berhasil dibuat!");
       setShowCreateForm(false);
       setDeliveryFormData({ customer_id: "", courier_id: "", notes: "" });
@@ -2040,6 +2072,13 @@ const Deliveries = () => {
   const handleUpdateCourier = async (deliveryId, courierId) => {
     try {
       await updateDeliveryCourier(deliveryId, courierId);
+
+    // 🔥 KIRIM NOTIFICATION
+    const delivery = deliveries.find(d => d.id === deliveryId);
+    if (delivery && courierId) {
+      await sendNotificationToCourier(courierId, delivery.customers?.name, "ditugaskan");
+    }
+      
       fetchData();
     } catch (error) {
       alert("Error: " + error.message);
@@ -2440,6 +2479,7 @@ const Deliveries = () => {
                   couriers={couriers}
                   currentUser={currentUser}
                   showAllOrders={showAllOrders}
+                  onSendNotification={sendNotificationToCourier}
                 />
               ))}
             </div>
@@ -3057,6 +3097,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
