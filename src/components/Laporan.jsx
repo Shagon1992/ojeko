@@ -312,10 +312,14 @@ const Laporan = () => {
           // HEADER UTAMA
           excelData.push(["LAPORAN KINERJA OJEK-O"]);
           excelData.push([`Periode: ${reportData.period.label}`]);
-          excelData.push([`Role: ${isAdmin ? 'Admin' : 'Kurir'}`]);
-          if (!isAdmin) {
+          
+          if (isAdmin) {
+            excelData.push(["Role: Admin"]);
+          } else {
             excelData.push([`Kurir: ${currentUser?.username || currentUser?.name || '-'}`]);
           }
+          
+          // Baris kosong pemisah
           excelData.push([""]);
   
           // 1. SUMMARY
@@ -394,8 +398,6 @@ const Laporan = () => {
             { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
             { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
             { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } },
-            ...(!isAdmin ? [{ s: { r: 3, c: 0 }, e: { r: 3, c: 5 } }] : []),
-
             { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } },
             
             // 🔥 PERBAIKAN: Merge "Matrix" (A6+B6)
@@ -1722,6 +1724,7 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
 
 
