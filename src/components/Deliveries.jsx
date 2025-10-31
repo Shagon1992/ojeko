@@ -17,52 +17,8 @@ import {
   deleteDelivery,
 } from "../lib/deliveries";
 import "leaflet/dist/leaflet.css";
-import MapPickerModal from "./MapPickerModal";
-
-// =============================================
-// KONSTANTA & FUNGSI OSRM UNTUK DELIVERIES
-// =============================================
-
-// Koordinat RS Aminah Blitar
-const RS_AMINAH_COORDINATES = {
-  lat: -8.101618,
-  lng: 112.1687995,
-};
-
-// Fungsi hitung jarak dengan OSRM - FIXED ADDITION +0.3km
-const calculateDistanceWithOSRM = async (customerLat, customerLng) => {
-  try {
-    const response = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/` +
-      `${RS_AMINAH_COORDINATES.lng},${RS_AMINAH_COORDINATES.lat};${customerLng},${customerLat}?overview=false`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.routes && data.routes[0]) {
-      const distanceMeters = data.routes[0].distance;
-      const distanceKm = (distanceMeters / 1000).toFixed(2);
-      
-      // 🔥 FIXED ADDITION: Selalu tambah 0.3km
-      const correctedDistanceKm = (parseFloat(distanceKm) + 0.3).toFixed(2);
-      
-      // 🔥 JARAK MINIMAL 1 KM
-      const finalDistanceKm = Math.max(parseFloat(correctedDistanceKm), 1.0).toFixed(2);
-      
-      return parseFloat(finalDistanceKm);
-    } else if (data.code === "NoRoute") {
-      throw new Error("Tidak ada rute yang ditemukan. Koordinat mungkin tidak valid.");
-    } else {
-      throw new Error("Gagal menghitung jarak. Response OSRM tidak valid.");
-    }
-  } catch (error) {
-    throw new Error(`Gagal menghitung jarak: ${error.message}`);
-  }
-};
+import CustomerFormModal from "./CustomerFormModal";
+import CreateDeliveryModal from "./CreateDeliveryModal";
 
 // =============================================
 // FUNGSI HELPER UNTUK TEMPLATE MESSAGE
@@ -402,594 +358,6 @@ const TemplateModal = ({
 };
 
 // =============================================
-// KOMPONEN QUICK CUSTOMER FORM - DIPERBAIKI
-// =============================================
-
-const QuickCustomerForm = ({
-  onSave,
-  onCancel,
-  initialData,
-  isRequiredForCompletion = false,
-  currentUserRole,
-}) => {
-  const [formData, setFormData] = useState({
-    name: initialData?.name || "",
-    phone: initialData?.phone || "",
-    address: initialData?.address || "",
-    lat: initialData?.lat || "",
-    lng: initialData?.lng || "",
-    distance_km: initialData?.distance_km || "",
-    delivery_fee: initialData?.delivery_fee || "",
-  });
-  const [showMapModal, setShowMapModal] = useState(false);
-  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-
-  // 🔥 FUNGSI BARU: Hitung jarak otomatis dari RS
-  const handleCalculateDistance = async () => {
-    if (!formData.lat || !formData.lng) {
-      alert("❌ Harap isi koordinat latitude dan longitude terlebih dahulu!");
-      return;
-    }
-
-    const lat = parseFloat(formData.lat);
-    const lng = parseFloat(formData.lng);
-
-    if (isNaN(lat) || isNaN(lng)) {
-      alert("❌ Format koordinat tidak valid!");
-      return;
-    }
-
-    setIsCalculatingDistance(true);
-
-    try {
-      const distanceKm = await calculateDistanceWithOSRM(lat, lng);
-
-      if (distanceKm) {
-        // Auto-isi jarak
-        setFormData((prev) => ({
-          ...prev,
-          distance_km: distanceKm.toString(),
-        }));
-
-        // Auto-hitung ongkir
-        const rawFee = distanceKm * 2500 + 1000;
-        const roundedFee = Math.ceil(rawFee / 500) * 500;
-
-        setFormData((prev) => ({
-          ...prev,
-          delivery_fee: roundedFee.toString(),
-        }));
-
-        alert(
-          `✅ Berhasil menghitung jarak!\n\n📏 Jarak: ${distanceKm} km\n💰 Ongkir: Rp ${roundedFee.toLocaleString()}`
-        );
-      } else {
-        alert("❌ Gagal menghitung jarak. Coba lagi.");
-      }
-    } catch (error) {
-      alert("❌ Error: " + error.message);
-    } finally {
-      setIsCalculatingDistance(false);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleCoordinateSelect = (lat, lng) => {
-    setFormData((prev) => ({
-      ...prev,
-      lat: lat.toString(),
-      lng: lng.toString(),
-    }));
-  };
-
-  const calculateDistanceFromFee = () => {
-    if (!formData.delivery_fee) {
-      alert("Masukkan ongkir terlebih dahulu!");
-      return;
-    }
-    const fee = parseFloat(formData.delivery_fee);
-    if (isNaN(fee)) {
-      alert("Format ongkir tidak valid!");
-      return;
-    }
-    const distance = (fee - 1000) / 2500;
-    setFormData((prev) => ({ ...prev, distance_km: distance.toFixed(2) }));
-  };
-
-  const calculateFeeFromDistance = () => {
-    if (!formData.distance_km) {
-      alert("Masukkan jarak terlebih dahulu!");
-      return;
-    }
-    const distance = parseFloat(formData.distance_km);
-    if (isNaN(distance)) {
-      alert("Format jarak tidak valid!");
-      return;
-    }
-    const rawFee = distance * 2500 + 1000;
-    const roundedFee = Math.ceil(rawFee / 500) * 500;
-    setFormData((prev) => ({ ...prev, delivery_fee: roundedFee.toString() }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!formData.name || !formData.phone || !formData.address) {
-      alert("Nama, No HP, dan Alamat harus diisi!");
-      return;
-    }
-
-    // 🔥 PERBAIKAN: Validasi berbeda untuk admin vs kurir
-    if (isRequiredForCompletion) {
-      const isAdmin = currentUserRole === "admin";
-
-      if (isAdmin) {
-        // Admin: lat/long optional, tapi lainnya wajib
-        if (!formData.distance_km || !formData.delivery_fee) {
-          alert(
-            "Untuk menyelesaikan pengiriman, data harus lengkap:\n\n" +
-              "• Nama, No HP, Alamat ✅ WAJIB\n" +
-              "• Jarak & Ongkos Kirim ✅ WAJIB\n" +
-              "• Latitude & Longitude ❌ BOLEH KOSONG (khusus admin)\n\n" +
-              "Harap lengkapi data terlebih dahulu."
-          );
-          return;
-        }
-      } else {
-        // Kurir: semua wajib termasuk lat/long
-        if (
-          !formData.lat ||
-          !formData.lng ||
-          !formData.distance_km ||
-          !formData.delivery_fee
-        ) {
-          alert(
-            "Untuk menyelesaikan pengiriman, semua data harus lengkap:\n\n" +
-              "• Latitude & Longitude\n• Jarak\n• Ongkos Kirim\n\n" +
-              "Harap lengkapi semua data terlebih dahulu."
-          );
-          return;
-        }
-      }
-    }
-
-    onSave(formData);
-  };
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-        padding: "16px",
-      }}
-    >
-      <div
-        style={{
-          background: "white",
-          padding: "20px",
-          borderRadius: "12px",
-          width: "100%",
-          maxWidth: "500px",
-          maxHeight: "90vh",
-          overflow: "auto",
-          boxSizing: "border-box",
-        }}
-      >
-        <h3
-          style={{
-            margin: "0 0 20px 0",
-            color: "#1e293b",
-            textAlign: "center",
-            fontSize: "18px",
-          }}
-        >
-          {initialData ? "✏️ Edit Customer" : "➕ Buat Customer Baru"}
-          {isRequiredForCompletion && (
-            <div
-              style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px" }}
-            >
-              ⚠️ Wajib lengkapi semua data untuk menyelesaikan pengiriman
-            </div>
-          )}
-        </h3>
-
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "6px",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Nama *
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-              required
-            />
-          </div>
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "6px",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              No HP *
-            </label>
-            <input
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleInputChange}
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "14px",
-                boxSizing: "border-box",
-              }}
-              required
-            />
-          </div>
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "6px",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Alamat *
-            </label>
-            <textarea
-              name="address"
-              value={formData.address}
-              onChange={handleInputChange}
-              rows="2"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "14px",
-                resize: "vertical",
-                outline: "none",
-                boxSizing: "border-box",
-                fontFamily: "inherit",
-                marginBottom: "8px",
-              }}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowMapModal(true)}
-              style={{
-                width: "100%",
-                padding: "10px 16px",
-                background: "#4299e1",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                cursor: "pointer",
-              }}
-            >
-              🗺️ Ambil Koordinat dari Map
-            </button>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "4px",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Latitude
-                {currentUserRole !== "admin" && (
-                  <span style={{ color: "#ef4444" }}> *</span>
-                )}
-              </label>
-              <input
-                type="number"
-                step="any"
-                name="lat"
-                value={formData.lat}
-                onChange={handleInputChange}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  boxSizing: "border-box",
-                }}
-                placeholder={currentUserRole === "admin" ? "Opsional" : "Wajib"}
-              />
-            </div>
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "4px",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Longitude
-                {currentUserRole !== "admin" && (
-                  <span style={{ color: "#ef4444" }}> *</span>
-                )}
-              </label>
-              <input
-                type="number"
-                step="any"
-                name="lng"
-                value={formData.lng}
-                onChange={handleInputChange}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  boxSizing: "border-box",
-                }}
-                placeholder={currentUserRole === "admin" ? "Opsional" : "Wajib"}
-              />
-            </div>
-          </div>
-
-          {/* 🔥 TOMBOL BARU: Hitung Jarak dari RS */}
-          {(formData.lat || formData.lng) && (
-            <div style={{ marginBottom: "16px" }}>
-              <button
-                type="button"
-                onClick={handleCalculateDistance}
-                disabled={isCalculatingDistance}
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  background: isCalculatingDistance ? "#94a3b8" : "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: isCalculatingDistance ? "not-allowed" : "pointer",
-                  opacity: isCalculatingDistance ? 0.7 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                }}
-              >
-                {isCalculatingDistance ? (
-                  <>
-                    <div
-                      style={{
-                        width: "16px",
-                        height: "16px",
-                        border: "2px solid transparent",
-                        borderTop: "2px solid white",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    ></div>
-                    Menghitung Jarak...
-                  </>
-                ) : (
-                  <>📏 Hitung Jarak dari RS Aminah</>
-                )}
-              </button>
-              <div
-                style={{
-                  fontSize: "11px",
-                  color: "#64748b",
-                  textAlign: "center",
-                  marginTop: "6px",
-                }}
-              >
-                Akan menghitung jarak berkendara dari RS Aminah Blitar ke
-                koordinat di atas
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "4px",
-                fontWeight: "600",
-                fontSize: "13px",
-              }}
-            >
-              Jarak (km) {isRequiredForCompletion && " *"}
-            </label>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <input
-                type="number"
-                step="0.1"
-                name="distance_km"
-                value={formData.distance_km}
-                onChange={handleInputChange}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  boxSizing: "border-box",
-                }}
-                required={isRequiredForCompletion}
-              />
-              <button
-                type="button"
-                onClick={calculateFeeFromDistance}
-                style={{
-                  padding: "10px 12px",
-                  background: "#8b5cf6",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                💰 Hitung Ongkir
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "4px",
-                fontWeight: "600",
-                fontSize: "13px",
-              }}
-            >
-              Ongkir (Rp) {isRequiredForCompletion && " *"}
-            </label>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <input
-                type="number"
-                name="delivery_fee"
-                value={formData.delivery_fee}
-                onChange={handleInputChange}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  boxSizing: "border-box",
-                }}
-                required={isRequiredForCompletion}
-              />
-              <button
-                type="button"
-                onClick={calculateDistanceFromFee}
-                style={{
-                  padding: "10px 12px",
-                  background: "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                📏 Hitung Jarak
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "12px",
-              justifyContent: "flex-end",
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              type="button"
-              onClick={onCancel}
-              style={{
-                padding: "12px 20px",
-                background: "white",
-                color: "#64748b",
-                border: "1px solid #d1d5db",
-                borderRadius: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                flex: 1,
-                minWidth: "120px",
-              }}
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              style={{
-                padding: "12px 20px",
-                background: "#10b981",
-                color: "white",
-                border: "none",
-                borderRadius: "88px",
-                fontSize: "14px",
-                fontWeight: "600",
-                cursor: "pointer",
-                flex: 1,
-                minWidth: "120px",
-              }}
-            >
-              Simpan
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {showMapModal && (
-        <MapPickerModal
-          onCoordinateSelect={handleCoordinateSelect}
-          onClose={() => setShowMapModal(false)}
-          existingLat={formData.lat}
-          existingLng={formData.lng}
-        />
-      )}
-    </div>
-  );
-};
-
-// =============================================
 // KOMPONEN DELIVERY CARD DENGAN TEMPLATE WA
 // =============================================
 
@@ -1008,8 +376,6 @@ const DeliveryCard = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [selectedCourier, setSelectedCourier] = useState("");
-  const [showCustomerForm, setShowCustomerForm] = useState(false);
-  const [customerToEdit, setCustomerToEdit] = useState(null);
 
   // STATE BARU UNTUK TEMPLATE WA
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -1096,18 +462,18 @@ const DeliveryCard = ({
       alert("Pilih kurir terlebih dahulu!");
       return;
     }
-  
+
     const courier = couriers.find((c) => c.id === selectedCourier);
     if (!courier) return;
-  
+
     const konfirmasi = confirm(
       `Betul akan ganti kurir menjadi ${courier.name}?`
     );
     if (!konfirmasi) return;
-  
+
     try {
       const success = await onUpdateCourier(delivery.id, selectedCourier);
-      
+
       if (success) {
         setShowCourierModal(false);
         alert(`Kurir berhasil diganti menjadi ${courier.name}`);
@@ -1146,7 +512,7 @@ const DeliveryCard = ({
   };
 
   const handleSelesai = () => {
-    // 🔥 VALIDASI 1: Kurir harus dipilih (khusus admin)
+    // VALIDASI 1: Kurir harus dipilih (khusus admin)
     if (isAdmin && !delivery.courier_id) {
       alert(
         "❌ Tidak bisa menyelesaikan pengiriman!\n\nHarap pilih kurir terlebih dahulu sebelum menyelesaikan pengiriman."
@@ -1154,7 +520,7 @@ const DeliveryCard = ({
       return;
     }
 
-    // 🔥 VALIDASI 2: Data customer (beda validasi admin vs kurir)
+    // VALIDASI 2: Data customer (beda validasi admin vs kurir)
     if (!isCustomerDataComplete(delivery.customers, currentUser.role)) {
       const roleSpecificMessage = isAdmin
         ? "Data customer tidak lengkap. Data wajib: Nama, Alamat, No HP, Jarak, Ongkir.\n\nKoordinat (lat/long) BOLEH KOSONG untuk admin.\n\nApakah Anda ingin melengkapi data sekarang?"
@@ -1163,58 +529,17 @@ const DeliveryCard = ({
       const konfirmasi = confirm(roleSpecificMessage);
 
       if (konfirmasi) {
-        setCustomerToEdit(delivery.customers);
-        setShowCustomerForm(true);
+        onEditCustomer(delivery.customers);
       }
       return;
     }
 
-    // 🔥 KONFIRMASI FINAL
+    // KONFIRMASI FINAL
     const konfirmasiSelesai = confirm(
       "Apakah obat sudah benar selesai dikirim?"
     );
     if (konfirmasiSelesai) {
       onUpdateStatus(delivery.id, "completed");
-    }
-  };
-
-  const handleAfterCustomerUpdate = async (customerData) => {
-    setShowCustomerForm(false);
-    setCustomerToEdit(null);
-
-    try {
-      const success = await onUpdateCustomer({
-        ...customerData,
-        id: delivery.customers.id,
-      });
-
-      if (success) {
-        setTimeout(() => {
-          // ✅ PERBAIKAN: Gunakan validasi yang sama seperti handleSelesai
-          if (isAdmin && !delivery.courier_id) {
-            alert(
-              "❌ Data customer sudah lengkap, tapi kurir belum dipilih!\n\nHarap pilih kurir terlebih dahulu."
-            );
-            return;
-          }
-
-          // ✅ PERBAIKAN: Gunakan validasi role-specific
-          if (isCustomerDataComplete(customerData, currentUser.role)) {
-            const konfirmasiSelesai = confirm(
-              "Data customer sudah lengkap. Apakah Anda ingin menyelesaikan pengiriman sekarang?"
-            );
-            if (konfirmasiSelesai) {
-              onUpdateStatus(delivery.id, "completed");
-            }
-          } else {
-            alert(
-              "❌ Data customer masih belum lengkap. Silakan lengkapi kembali."
-            );
-          }
-        }, 500);
-      }
-    } catch (error) {
-      alert("Error: " + error.message);
     }
   };
 
@@ -1255,7 +580,7 @@ const DeliveryCard = ({
             📞 WA Customer
           </button>
         )}
-    
+
         {/* WA Kurir Button */}
         {isAdmin && delivery.couriers && (
           <button
@@ -1276,8 +601,8 @@ const DeliveryCard = ({
             📞 WA Kurir
           </button>
         )}
-    
-        {/* 🔥 TOMBOL BARU: Edit Data Customer */}
+
+        {/* TOMBOL BARU: Edit Data Customer */}
         {(isAdmin || isAssignedCourier) && (
           <button
             onClick={() => onEditCustomer(delivery.customers)}
@@ -1297,12 +622,12 @@ const DeliveryCard = ({
               gap: "4px",
               justifyContent: "center",
             }}
-            >
+          >
             ✏️ Edit Customer
           </button>
         )}
-    
-        {/* Tombol lainnya tetap sama */}
+
+        {/* Tombol lainnya */}
         {(isAdmin || isAssignedCourier) && (
           <button
             onClick={handleGantiKurir}
@@ -1322,7 +647,7 @@ const DeliveryCard = ({
             🔄 Ganti Kurir
           </button>
         )}
-    
+
         {!isAdmin && delivery.status === "pending" && isAssignedCourier && (
           <button
             onClick={handleKirimObat}
@@ -1342,7 +667,7 @@ const DeliveryCard = ({
             🚗 Kirim Obat
           </button>
         )}
-    
+
         {((isAdmin && delivery.status !== "completed") ||
           (!isAdmin &&
             delivery.status === "on_delivery" &&
@@ -1354,13 +679,15 @@ const DeliveryCard = ({
               style={{
                 width: "100%",
                 padding: "6px 10px",
-                background: isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
+                background:
+                  isAdmin && !delivery.courier_id ? "#9ca3af" : "#10b981",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
                 fontSize: "10px",
                 fontWeight: "500",
-                cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
+                cursor:
+                  isAdmin && !delivery.courier_id ? "not-allowed" : "pointer",
                 opacity: isAdmin && !delivery.courier_id ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
@@ -1392,11 +719,13 @@ const DeliveryCard = ({
                 }
               }}
             >
-              {isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}
+              {isAdmin && !delivery.courier_id
+                ? "⏳ Pilih Kurir"
+                : "✅ Selesai"}
             </button>
           </div>
         )}
-    
+
         {isAdmin && (
           <button
             onClick={() => onDelete(delivery.id)}
@@ -1705,20 +1034,6 @@ const DeliveryCard = ({
         </div>
       )}
 
-      {/* Modal Edit Customer */}
-      {showCustomerForm && customerToEdit && (
-        <QuickCustomerForm
-          onSave={handleAfterCustomerUpdate}
-          onCancel={() => {
-            setShowCustomerForm(false);
-            setCustomerToEdit(null);
-          }}
-          initialData={customerToEdit}
-          isRequiredForCompletion={true}
-          currentUserRole={currentUser.role}
-        />
-      )}
-
       {/* Template Modal */}
       {showTemplateModal && (
         <TemplateModal
@@ -1736,7 +1051,7 @@ const DeliveryCard = ({
 };
 
 // =============================================
-// KOMPONEN UTAMA DELIVERIES DENGAN SEARCH OPTIMAL
+// KOMPONEN UTAMA DELIVERIES YANG SUDAH DIPERBAIKI
 // =============================================
 
 const Deliveries = () => {
@@ -1744,117 +1059,16 @@ const Deliveries = () => {
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("belum-dikirim");
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showCustomerForm, setShowCustomerForm] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAllOrders, setShowAllOrders] = useState(false);
 
-  // STATE BARU UNTUK SEARCH CUSTOMER YANG OPTIMAL
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
-  const [deliveryFormData, setDeliveryFormData] = useState({
-    customer_id: "",
-    courier_id: "",
-    notes: "",
-  });
+  // STATE MODAL BARU
+  const [showCreateDeliveryModal, setShowCreateDeliveryModal] = useState(false);
+  const [showCustomerFormModal, setShowCustomerFormModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
 
   const currentUser = JSON.parse(localStorage.getItem("user"));
   const isAdmin = currentUser?.role === "admin";
-
-  // FUNGSI BARU: Debounced search customer
-  const handleCustomerSearch = (searchTerm) => {
-    setCustomerSearch(searchTerm);
-    setSearchError("");
-
-    // Clear timeout sebelumnya
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    // Jika search kosong, reset results
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
-      setHasSearched(false);
-      return;
-    }
-
-    // Set loading state
-    setSearchLoading(true);
-
-    // Set timeout untuk debounce
-    const newTimeout = setTimeout(async () => {
-      try {
-        await performSearch(searchTerm.trim());
-      } catch (error) {
-        setSearchError("Error saat mencari customer");
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 300); // 300ms debounce
-
-    setSearchTimeout(newTimeout);
-  };
-
-  // FUNGSI BARU: Perform actual search ke database
-  const performSearch = async (searchTerm) => {
-    setHasSearched(true);
-
-    const { data, error } = await supabase
-      .from("customers")
-      .select("*")
-      .or(
-        `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,address.ilike.%${searchTerm}%`
-      )
-      .limit(15)
-      .order("name");
-
-    if (error) {
-      throw error;
-    }
-
-    setSearchResults(data || []);
-  };
-
-  // FUNGSI BARU: Reset search
-  const resetSearch = () => {
-    setCustomerSearch("");
-    setSearchResults([]);
-    setHasSearched(false);
-    setSearchError("");
-  };
-
-  // FUNGSI BARU: Select customer
-  const handleSelectCustomer = (customer) => {
-    setDeliveryFormData((prev) => ({ ...prev, customer_id: customer.id }));
-    setCustomerSearch(customer.name);
-    setHasSearched(false);
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // EFFECT BARU: Refresh search results ketika deliveries berubah
-  useEffect(() => {
-    if (customerSearch && hasSearched) {
-      performSearch(customerSearch);
-    }
-  }, [deliveries, customerSearch, hasSearched]);
-
-  // EFFECT UNTUK CLEANUP
-  useEffect(() => {
-    return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
-      }
-    };
-  }, [searchTimeout]);
 
   // Fetch data utama
   const fetchData = async () => {
@@ -1878,6 +1092,10 @@ const Deliveries = () => {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   // Filter deliveries based on active tab
   const getFilteredDeliveries = () => {
     const today = new Date().toISOString().split("T")[0];
@@ -1899,14 +1117,14 @@ const Deliveries = () => {
         break;
     }
 
-    // 🔥 FILTER BERDASARKAN showAllOrders DAN ROLE
+    // FILTER BERDASARKAN showAllOrders DAN ROLE
     if (!isAdmin && !showAllOrders) {
       filtered = filtered.filter(
         (d) => d.courier_id === currentUser.courier_id
       );
     }
 
-    // Search filter (tetap sama)
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (d) =>
@@ -1929,7 +1147,7 @@ const Deliveries = () => {
     const today = new Date().toISOString().split("T")[0];
     let filtered = deliveries;
 
-    // 🔥 FILTER BERDASARKAN showAllOrders DAN ROLE
+    // FILTER BERDASARKAN showAllOrders DAN ROLE
     if (!isAdmin && !showAllOrders) {
       filtered = filtered.filter(
         (d) => d.courier_id === currentUser.courier_id
@@ -1955,42 +1173,6 @@ const Deliveries = () => {
     return filtered.length;
   };
 
-  // Create new delivery
-  const handleCreateDelivery = async (e) => {
-    e.preventDefault();
-  
-    if (!deliveryFormData.customer_id) {
-      alert("Pilih customer terlebih dahulu!");
-      return;
-    }
-  
-    try {
-      const { data, error } = await supabase
-        .from("deliveries")
-        .insert([
-          {
-            customer_id: deliveryFormData.customer_id,
-            courier_id: deliveryFormData.courier_id || null,
-            status: "pending",
-            delivery_date: new Date().toISOString().split("T")[0],
-            notes: deliveryFormData.notes,
-          },
-        ])
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      alert("Delivery berhasil dibuat!");
-      setShowCreateForm(false);
-      setDeliveryFormData({ customer_id: "", courier_id: "", notes: "" });
-      setCustomerSearch("");
-      fetchData();
-    } catch (error) {
-      alert("Error: " + error.message);
-    }
-  };
-
   // Update delivery status
   const handleUpdateStatus = async (deliveryId, status) => {
     try {
@@ -2001,7 +1183,7 @@ const Deliveries = () => {
     }
   };
 
-  // Update delivery courier - DI KOMPONEN UTAMA
+  // Update delivery courier
   const handleUpdateCourier = async (deliveryId, courierId) => {
     try {
       await updateDeliveryCourier(deliveryId, courierId);
@@ -2059,7 +1241,7 @@ const Deliveries = () => {
     }
   };
 
-  // Save customer (create or update)
+  // 🔥 FUNGSI BARU: Handle save customer dari CustomerFormModal
   const handleSaveCustomer = async (customerData) => {
     try {
       const preparedData = {
@@ -2072,7 +1254,7 @@ const Deliveries = () => {
           ? parseFloat(customerData.distance_km)
           : 0,
         delivery_fee: customerData.delivery_fee
-          ? parseInt(customerData.delivery_fee)
+          ? parseInt(customerData.delivery_fee.replace(/\./g, ""))
           : 0,
       };
 
@@ -2099,21 +1281,9 @@ const Deliveries = () => {
         if (error) throw error;
         alert("Customer berhasil dibuat!");
         newCustomerId = data.id;
-
-        // 🔥 PERBAIKAN PENTING: Otomatis pilih customer baru di form pengiriman
-        if (showCreateForm) {
-          setDeliveryFormData((prev) => ({
-            ...prev,
-            customer_id: data.id,
-          }));
-          setCustomerSearch(data.name);
-          setSearchResults([data]);
-          setHasSearched(true);
-        }
       }
 
-      // Refresh data dan reset state
-      setShowCustomerForm(false);
+      setShowCustomerFormModal(false);
       setEditingCustomer(null);
       fetchData();
 
@@ -2127,7 +1297,13 @@ const Deliveries = () => {
   // Edit customer
   const handleEditCustomer = (customer) => {
     setEditingCustomer(customer);
-    setShowCustomerForm(true);
+    setShowCustomerFormModal(true);
+  };
+
+  // 🔥 FUNGSI BARU: Handle success create delivery
+  const handleDeliverySuccess = () => {
+    setShowCreateDeliveryModal(false);
+    fetchData();
   };
 
   if (loading) {
@@ -2198,7 +1374,7 @@ const Deliveries = () => {
           </div>
 
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => setShowCreateDeliveryModal(true)}
             style={{
               padding: "12px 20px",
               background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -2217,6 +1393,7 @@ const Deliveries = () => {
             Buat Pengiriman
           </button>
         </div>
+
         {/* Checkbox untuk kurir */}
         {!isAdmin && (
           <div
@@ -2269,6 +1446,7 @@ const Deliveries = () => {
             </div>
           </div>
         )}
+
         {/* Tabs */}
         <div
           style={{
@@ -2330,6 +1508,7 @@ const Deliveries = () => {
             </button>
           ))}
         </div>
+
         {/* Search Bar */}
         <div
           style={{
@@ -2355,6 +1534,7 @@ const Deliveries = () => {
             }}
           />
         </div>
+
         {/* Deliveries List */}
         <div
           style={{
@@ -2411,599 +1591,28 @@ const Deliveries = () => {
         </div>
       </div>
 
-      {/* Create Delivery Form */}
-      {showCreateForm && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-            padding: "20px",
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              width: "100%",
-              maxWidth: "500px",
-              maxHeight: "90vh",
-              overflow: "auto",
-              boxSizing: "border-box",
-            }}
-          >
-            <h3 style={{ margin: "0 0 16px 0", color: "#1e293b" }}>
-              ➕ Buat Pengiriman Baru
-            </h3>
-
-            <form onSubmit={handleCreateDelivery}>
-              {/* Customer Search - VERSION BARU YANG OPTIMAL */}
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontWeight: "600",
-                    fontSize: "14px",
-                  }}
-                >
-                  Cari Customer *
-                </label>
-
-                <div style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    placeholder="🔍 Cari customer (nama, no HP, alamat)..."
-                    value={customerSearch}
-                    onChange={(e) => handleCustomerSearch(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                      paddingRight: "40px",
-                    }}
-                    onFocus={() => setHasSearched(true)}
-                  />
-
-                  {/* Loading Indicator */}
-                  {searchLoading && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: "12px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "16px",
-                          height: "16px",
-                          border: "2px solid #e2e8f0",
-                          borderTop: "2px solid #667eea",
-                          borderRadius: "50%",
-                          animation: "spin 1s linear infinite",
-                        }}
-                      ></div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Search Info */}
-                {customerSearch && (
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#64748b",
-                      marginTop: "4px",
-                      textAlign: "right",
-                    }}
-                  >
-                    {searchLoading
-                      ? "Mencari..."
-                      : `Mengetik... ${customerSearch.length} karakter`}
-                  </div>
-                )}
-
-                {/* Search Results */}
-                {hasSearched && !searchLoading && (
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "8px",
-                      maxHeight: "300px",
-                      overflow: "auto",
-                      background: "white",
-                    }}
-                  >
-                    {/* Case 1: Ada hasil */}
-                    {(searchResults.length > 0 ||
-                      deliveryFormData.customer_id) && (
-                      <div>
-                        <div
-                          style={{
-                            padding: "8px 12px",
-                            background: "#f8fafc",
-                            borderBottom: "1px solid #e2e8f0",
-                            fontSize: "11px",
-                            color: "#64748b",
-                            fontWeight: "600",
-                          }}
-                        >
-                          📊{" "}
-                          {searchResults.length > 0
-                            ? `Ditemukan ${searchResults.length} customer`
-                            : "Customer terpilih"}
-                        </div>
-
-                        {/* 🔥 PERBAIKAN: Tampilkan customer yang baru dibuat */}
-                        {searchResults.map((customer) => (
-                          <div
-                            key={customer.id}
-                            onClick={() => handleSelectCustomer(customer)}
-                            style={{
-                              padding: "12px",
-                              borderBottom: "1px solid #f1f5f9",
-                              cursor: "pointer",
-                              transition: "background 0.2s",
-                              backgroundColor:
-                                deliveryFormData.customer_id === customer.id
-                                  ? "#f0f9ff"
-                                  : "white",
-                              borderRadius: "4px",
-                              margin: "2px 0",
-                              border:
-                                deliveryFormData.customer_id === customer.id
-                                  ? "1px solid #3b82f6"
-                                  : "none",
-                            }}
-                            onMouseOver={(e) => {
-                              if (
-                                deliveryFormData.customer_id !== customer.id
-                              ) {
-                                e.currentTarget.style.background = "#f8fafc";
-                                e.currentTarget.style.border =
-                                  "1px solid #e2e8f0";
-                              }
-                            }}
-                            onMouseOut={(e) => {
-                              if (
-                                deliveryFormData.customer_id !== customer.id
-                              ) {
-                                e.currentTarget.style.background = "white";
-                                e.currentTarget.style.border =
-                                  deliveryFormData.customer_id === customer.id
-                                    ? "1px solid #3b82f6"
-                                    : "none";
-                              }
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontWeight: "600",
-                                fontSize: "14px",
-                                color: "#1e293b",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              {customer.name}
-                              {deliveryFormData.customer_id === customer.id && (
-                                <span
-                                  style={{
-                                    fontSize: "10px",
-                                    background: "#10b981",
-                                    color: "white",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                  }}
-                                >
-                                  ✅ TERPILIH
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "12px",
-                                color: "#64748b",
-                                marginTop: "2px",
-                              }}
-                            >
-                              {customer.address}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "11px",
-                                color: "#94a3b8",
-                                marginTop: "2px",
-                              }}
-                            >
-                              📞 {customer.phone}
-                              {customer.delivery_fee > 0 && (
-                                <span style={{ marginLeft: "12px" }}>
-                                  💰 Rp {customer.delivery_fee.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Case 2: Tidak ada hasil */}
-                    {searchResults.length === 0 &&
-                      customerSearch &&
-                      !deliveryFormData.customer_id && (
-                        <div
-                          style={{
-                            textAlign: "center",
-                            padding: "30px 20px",
-                            color: "#64748b",
-                          }}
-                        >
-                          <div
-                            style={{ fontSize: "32px", marginBottom: "12px" }}
-                          >
-                            🔍
-                          </div>
-                          <div
-                            style={{
-                              fontWeight: "500",
-                              marginBottom: "8px",
-                              color: "#374151",
-                            }}
-                          >
-                            Tidak ada customer yang cocok
-                          </div>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              marginBottom: "16px",
-                              lineHeight: "1.4",
-                            }}
-                          >
-                            Tidak ditemukan customer dengan kata kunci:
-                            <br />
-                            <strong>"{customerSearch}"</strong>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowCustomerForm(true);
-                                setEditingCustomer({
-                                  name: customerSearch,
-                                  phone: "",
-                                  address: "",
-                                  lat: "",
-                                  lng: "",
-                                  distance_km: "",
-                                  delivery_fee: "",
-                                });
-                              }}
-                              style={{
-                                padding: "10px 16px",
-                                background: "#10b981",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "6px",
-                                fontSize: "13px",
-                                fontWeight: "600",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ➕ Buat Customer Baru: "{customerSearch}"
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={resetSearch}
-                              style={{
-                                padding: "8px 16px",
-                                background: "transparent",
-                                color: "#64748b",
-                                border: "1px solid #e2e8f0",
-                                borderRadius: "6px",
-                                fontSize: "12px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              🔄 Reset Pencarian
-                            </button>
-                          </div>
-
-                          {/* Search Tips */}
-                          <div
-                            style={{
-                              marginTop: "16px",
-                              fontSize: "11px",
-                              color: "#94a3b8",
-                              padding: "8px",
-                              background: "#f8fafc",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            💡 Tips: Cari dengan nama lengkap, nomor HP, atau
-                            bagian alamat
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Case 3: Error */}
-                    {searchError && (
-                      <div
-                        style={{
-                          padding: "16px",
-                          textAlign: "center",
-                          background: "#fef2f2",
-                          color: "#dc2626",
-                          borderRadius: "4px",
-                          margin: "8px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          ⚠️ Error
-                        </div>
-                        <div style={{ fontSize: "12px" }}>{searchError}</div>
-                        <button
-                          onClick={() => setSearchError("")}
-                          style={{
-                            marginTop: "8px",
-                            padding: "6px 12px",
-                            background: "#dc2626",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Tutup
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Selected Customer Info */}
-                {deliveryFormData.customer_id && (
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      padding: "12px",
-                      background: "#f0f9ff",
-                      borderRadius: "8px",
-                      border: "1px solid #bae6fd",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontWeight: "600",
-                            fontSize: "14px",
-                            color: "#0369a1",
-                          }}
-                        >
-                          ✅ Customer Terpilih
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: "#64748b",
-                            marginTop: "4px",
-                          }}
-                        >
-                          {searchResults.find(
-                            (c) => c.id === deliveryFormData.customer_id
-                          )?.name || "Customer tidak ditemukan"}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeliveryFormData((prev) => ({
-                            ...prev,
-                            customer_id: "",
-                          }));
-                          resetSearch();
-                        }}
-                        style={{
-                          padding: "6px 12px",
-                          background: "#ef4444",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✕ Hapus
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Courier Select */}
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontWeight: "600",
-                    fontSize: "14px",
-                  }}
-                >
-                  Pilih Kurir (Opsional)
-                </label>
-                <select
-                  value={deliveryFormData.courier_id}
-                  onChange={(e) =>
-                    setDeliveryFormData((prev) => ({
-                      ...prev,
-                      courier_id: e.target.value,
-                    }))
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                    background: "white",
-                  }}
-                >
-                  <option value="">Pilih Kurir</option>
-                  {couriers.map((courier) => (
-                    <option key={courier.id} value={courier.id}>
-                      {courier.name} {courier.is_available ? "✅" : "❌"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Notes */}
-              <div style={{ marginBottom: "20px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontWeight: "600",
-                    fontSize: "14px",
-                  }}
-                >
-                  Catatan (Opsional)
-                </label>
-                <textarea
-                  name="notes"
-                  value={deliveryFormData.notes}
-                  onChange={(e) =>
-                    setDeliveryFormData((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                  rows="3"
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    resize: "vertical",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#667eea";
-                    e.target.style.boxShadow =
-                      "0 0 0 3px rgba(102, 126, 234, 0.1)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#e2e8f0";
-                    e.target.style.boxShadow = "none";
-                  }}
-                  placeholder="Tambahkan catatan khusus..."
-                />
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateForm(false);
-                    setCustomerSearch("");
-                    setDeliveryFormData({
-                      customer_id: "",
-                      courier_id: "",
-                      notes: "",
-                    });
-                  }}
-                  style={{
-                    padding: "12px 20px",
-                    background: "white",
-                    color: "#64748b",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "12px 20px",
-                    background: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                  }}
-                >
-                  Buat Pengiriman
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* 🔥 MODAL: Create Delivery */}
+      {showCreateDeliveryModal && (
+        <CreateDeliveryModal
+          customer={null}
+          couriers={couriers}
+          onClose={() => setShowCreateDeliveryModal(false)}
+          onSuccess={handleDeliverySuccess}
+          mode="from-new"
+        />
       )}
 
-      {/* Customer Form */}
-      {showCustomerForm && (
-        <QuickCustomerForm
+      {/* 🔥 MODAL: Customer Form */}
+      {showCustomerFormModal && (
+        <CustomerFormModal
+          editingCustomer={editingCustomer}
           onSave={handleSaveCustomer}
-          onCancel={() => {
-            setShowCustomerForm(false);
+          onClose={() => {
+            setShowCustomerFormModal(false);
             setEditingCustomer(null);
           }}
-          initialData={editingCustomer}
           currentUserRole={currentUser.role}
+          isRequiredForCompletion={true}
         />
       )}
 
