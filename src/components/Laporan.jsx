@@ -458,70 +458,143 @@ const Laporan = () => {
           };
   
           // 🔥 TERAPKAN STYLE KE SEMUA CELL YANG PERLU
+          // 🔥 PERBAIKAN: Apply style ke setiap cell dengan benar
           const range = XLSX.utils.decode_range(worksheet["!ref"]);
           
           for (let R = range.s.r; R <= range.e.r; ++R) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
               const cell_ref = XLSX.utils.encode_cell({ r: R, c: C });
-              if (!worksheet[cell_ref]) continue;
               
-              // Header utama (A1, A2, A3, A4)
+              // Jika cell tidak ada, skip
+              if (!worksheet[cell_ref]) {
+                // 🔥 BUAT CELL KOSONG DENGAN STYLE JIKA PERLU
+                worksheet[cell_ref] = { v: undefined, t: 's' };
+              }
+          
+              // 🔥 INISIALISASI STYLE JIKA BELUM ADA
+              if (!worksheet[cell_ref].s) {
+                worksheet[cell_ref].s = {};
+              }
+          
+              // 1. HEADER UTAMA (A1, A2, A3, A4)
               if (R <= 3) {
                 worksheet[cell_ref].s = {
-                  font: { bold: true, sz: R === 0 ? 14 : 12 },
+                  font: { bold: true, sz: R === 0 ? 16 : 12 },
                   alignment: { horizontal: "center", vertical: "center" },
+                  fill: { fgColor: { rgb: "E8F4FD" } }, // Biru muda
                 };
                 continue;
               }
-  
-              // Summary header (Matrix & Hasil)
-              if (R === 5 && C <= 2) {
-                worksheet[cell_ref].s = grayHeader;
-                continue;
-              }
-  
-              // Summary data (Total Order, Total Revenue, dll)
-              if (R >= 6 && R <= (isAdmin ? 9 : 7) && C <= 2) {
+          
+              // 2. SUMMARY HEADER - "Matrix" & "Hasil" (Row 5)
+              if (R === 5) {
                 worksheet[cell_ref].s = {
-                  ...cellBase,
-                  alignment: { 
-                    vertical: "center", 
-                    horizontal: C === 2 ? "left" : "left" 
+                  font: { bold: true, color: { rgb: "000000" } },
+                  fill: { fgColor: { rgb: "D9D9D9" } }, // Abu-abu
+                  alignment: { horizontal: "center", vertical: "center" },
+                  border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } },
                   }
                 };
                 continue;
               }
-  
-              // Kinerja Kurir header (hanya admin)
+          
+              // 3. SUMMARY DATA (Row 6-9 untuk admin, 6-7 untuk kurir)
+              const summaryEndRow = isAdmin ? 9 : 7;
+              if (R >= 6 && R <= summaryEndRow) {
+                worksheet[cell_ref].s = {
+                  font: { color: { rgb: "000000" } },
+                  alignment: { 
+                    vertical: "center", 
+                    horizontal: C === 2 ? "left" : "left" 
+                  },
+                  border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } },
+                  }
+                };
+                continue;
+              }
+          
+              // 4. KINERJA KURIR HEADER (hanya admin)
               if (isAdmin && reportData.courierPerformance.length > 0) {
-                const courierHeaderRow = 11;
-                if (R === courierHeaderRow && C <= 3) {
-                  worksheet[cell_ref].s = grayHeader;
+                const courierHeaderRow = 11; // Sesuaikan dengan posisi sebenarnya
+                if (R === courierHeaderRow) {
+                  worksheet[cell_ref].s = {
+                    font: { bold: true, color: { rgb: "000000" } },
+                    fill: { fgColor: { rgb: "D9D9D9" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                      top: { style: "thin", color: { rgb: "000000" } },
+                      left: { style: "thin", color: { rgb: "000000" } },
+                      bottom: { style: "thin", color: { rgb: "000000" } },
+                      right: { style: "thin", color: { rgb: "000000" } },
+                    }
+                  };
                   continue;
                 }
-  
-                // Kinerja Kurir data
+          
+                // 5. KINERJA KURIR DATA
                 const courierStartRow = courierHeaderRow + 1;
                 const courierEndRow = courierStartRow + reportData.courierPerformance.length - 1;
-                if (R >= courierStartRow && R <= courierEndRow && C <= 3) {
-                  worksheet[cell_ref].s = C === 0 ? cellCenter : cellBase;
+                if (R >= courierStartRow && R <= courierEndRow) {
+                  worksheet[cell_ref].s = {
+                    font: { color: { rgb: "000000" } },
+                    alignment: { 
+                      vertical: "center", 
+                      horizontal: C === 0 ? "center" : "left" 
+                    },
+                    border: {
+                      top: { style: "thin", color: { rgb: "000000" } },
+                      left: { style: "thin", color: { rgb: "000000" } },
+                      bottom: { style: "thin", color: { rgb: "000000" } },
+                      right: { style: "thin", color: { rgb: "000000" } },
+                    }
+                  };
                   continue;
                 }
               }
-  
-              // Detail Pengiriman header
+          
+              // 6. DETAIL PENGIRIMAN HEADER
               const detailHeaderRow = isAdmin 
                 ? (13 + reportData.courierPerformance.length)
                 : 12;
-              if (R === detailHeaderRow && C <= 5) {
-                worksheet[cell_ref].s = grayHeader;
+              if (R === detailHeaderRow) {
+                worksheet[cell_ref].s = {
+                  font: { bold: true, color: { rgb: "000000" } },
+                  fill: { fgColor: { rgb: "D9D9D9" } },
+                  alignment: { horizontal: "center", vertical: "center" },
+                  border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } },
+                  }
+                };
                 continue;
               }
-  
-              // Detail Pengiriman data
+          
+              // 7. DETAIL PENGIRIMAN DATA
               const detailStartRow = detailHeaderRow + 1;
-              if (R >= detailStartRow && C <= 5) {
-                worksheet[cell_ref].s = C === 0 ? cellCenter : cellBase;
+              if (R >= detailStartRow) {
+                worksheet[cell_ref].s = {
+                  font: { color: { rgb: "000000" } },
+                  alignment: { 
+                    vertical: "center", 
+                    horizontal: C === 0 ? "center" : "left" 
+                  },
+                  border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } },
+                  }
+                };
                 continue;
               }
             }
@@ -1639,4 +1712,5 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
