@@ -6,30 +6,35 @@ import { saveAs } from "file-saver";
 const Laporan = () => {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [periodType, setPeriodType] = useState("harian"); // 🔥 DEFAULT HARIAN
+  const [periodType, setPeriodType] = useState("harian");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reportData, setReportData] = useState(null);
 
-  // 🔥 STATE PAGINATION BARU
+  // STATE PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const currentUser = JSON.parse(localStorage.getItem("user"));
   const isAdmin = currentUser?.role === "admin";
 
-  // Set default dates - 🔥 SET HARI INI SEBAGAI DEFAULT
+  // Set default dates
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
-    setSelectedDate(today); // 🔥 DEFAULT HARI INI
+    setSelectedDate(today);
     setSelectedMonth(currentMonth);
     setStartDate(today);
     setEndDate(today);
   }, []);
+
+  // 🔥 FUNGSI BARU: Hitung tanggal akhir bulan dengan benar
+  const getLastDayOfMonth = (year, month) => {
+    return new Date(year, month, 0).getDate();
+  };
 
   // Fetch report data
   const fetchReportData = async () => {
@@ -54,18 +59,33 @@ const Laporan = () => {
           break;
 
         case "bulanan":
-          const monthStart = new Date(selectedMonth + "-01");
-          const monthEnd = new Date(
-            monthStart.getFullYear(),
-            monthStart.getMonth() + 1,
-            0
+          // 🔥 PERBAIKAN: Hitung tanggal akhir bulan dengan benar
+          const [year, month] = selectedMonth.split("-").map(Number);
+          const lastDay = getLastDayOfMonth(year, month);
+
+          start = `${selectedMonth}-01`;
+          end = `${selectedMonth}-${lastDay.toString().padStart(2, "0")}`;
+
+          periodLabel = new Date(year, month - 1, 1).toLocaleDateString(
+            "id-ID",
+            {
+              year: "numeric",
+              month: "long",
+            }
           );
-          start = monthStart.toISOString().split("T")[0];
-          end = monthEnd.toISOString().split("T")[0];
-          periodLabel = new Date(monthStart).toLocaleDateString("id-ID", {
-            year: "numeric",
-            month: "long",
-          });
+
+          // Jika bulan adalah bulan berjalan, batasi sampai hari ini
+          const today = new Date();
+          const currentYear = today.getFullYear();
+          const currentMonth = today.getMonth() + 1;
+
+          if (year === currentYear && month === currentMonth) {
+            const todayDate = today.getDate();
+            if (todayDate < lastDay) {
+              end = `${selectedMonth}-${todayDate.toString().padStart(2, "0")}`;
+              periodLabel += " (Bulan Berjalan - sampai hari ini)";
+            }
+          }
           break;
 
         case "custom":
@@ -80,10 +100,12 @@ const Laporan = () => {
         start,
         end,
         periodLabel,
+        isAdmin,
+        courierId: currentUser?.courier_id,
       });
 
-      // Fetch deliveries data
-      const { data: deliveries, error: deliveriesError } = await supabase
+      // Base query untuk deliveries
+      let deliveriesQuery = supabase
         .from("deliveries")
         .select(
           `
@@ -107,62 +129,102 @@ const Laporan = () => {
         .lte("delivery_date", end)
         .order("delivery_date", { ascending: false });
 
-      if (deliveriesError) throw deliveriesError;
+      // FILTER BERBEDA UNTUK ADMIN VS KURIR
+      if (!isAdmin && currentUser?.courier_id) {
+        deliveriesQuery = deliveriesQuery.eq(
+          "courier_id",
+          currentUser.courier_id
+        );
+      }
 
-      // Fetch couriers untuk performance
-      const { data: allCouriers, error: couriersError } = await supabase
-        .from("couriers")
-        .select("id, name");
+      const { data: deliveries, error: deliveriesError } =
+        await deliveriesQuery;
 
-      if (couriersError) throw couriersError;
+      if (deliveriesError) {
+        console.error("Deliveries error:", deliveriesError);
+        throw deliveriesError;
+      }
+
+      console.log("Deliveries found:", deliveries?.length);
+
+      // Fetch couriers untuk performance (hanya admin)
+      let allCouriers = [];
+      if (isAdmin) {
+        const { data: couriersData, error: couriersError } = await supabase
+          .from("couriers")
+          .select("id, name");
+
+        if (couriersError) throw couriersError;
+        allCouriers = couriersData || [];
+      }
 
       // Calculate summary
       const totalDeliveries = deliveries?.length || 0;
       const completedDeliveries =
         deliveries?.filter((d) => d.status === "completed").length || 0;
-      const totalRevenue =
-        deliveries
-          ?.filter((d) => d.status === "completed")
-          .reduce((sum, d) => sum + (d.customers?.delivery_fee || 0), 0) || 0;
 
-      const daysDiff = Math.max(
-        1,
-        Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1
-      );
-      const averagePerDay = (totalDeliveries / daysDiff).toFixed(1);
+      let totalRevenue = 0;
+      let averagePerDay = "0";
+      let topCourier = ["Tidak ada data", 0];
 
-      // Calculate top courier
-      const courierStats = {};
-      deliveries?.forEach((delivery) => {
-        if (delivery.couriers?.name) {
-          const courierName = delivery.couriers.name;
-          courierStats[courierName] = (courierStats[courierName] || 0) + 1;
-        }
-      });
+      if (isAdmin) {
+        totalRevenue =
+          deliveries
+            ?.filter((d) => d.status === "completed")
+            .reduce((sum, d) => sum + (d.customers?.delivery_fee || 0), 0) || 0;
 
-      const topCourier = Object.entries(courierStats).sort(
-        ([, a], [, b]) => b - a
-      )[0] || ["Tidak ada data", 0];
+        const daysDiff = Math.max(
+          1,
+          Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) +
+            1
+        );
+        averagePerDay = (totalDeliveries / daysDiff).toFixed(1);
 
-      // Calculate courier performance
-      const performanceData = allCouriers
-        ?.map((courier) => {
-          const courierDeliveries =
-            deliveries?.filter((delivery) => {
-              return delivery.courier_id === courier.id;
-            }) || [];
+        // Calculate top courier hanya untuk admin
+        const courierStats = {};
+        deliveries?.forEach((delivery) => {
+          if (delivery.couriers?.name) {
+            const courierName = delivery.couriers.name;
+            courierStats[courierName] = (courierStats[courierName] || 0) + 1;
+          }
+        });
 
-          const revenue = courierDeliveries
-            .filter((d) => d.status === "completed")
-            .reduce((sum, d) => sum + (d.customers?.delivery_fee || 0), 0);
+        topCourier = Object.entries(courierStats).sort(
+          ([, a], [, b]) => b - a
+        )[0] || ["Tidak ada data", 0];
+      } else {
+        totalRevenue =
+          deliveries
+            ?.filter(
+              (d) =>
+                d.status === "completed" &&
+                d.courier_id === currentUser.courier_id
+            )
+            .reduce((sum, d) => sum + (d.customers?.delivery_fee || 0), 0) || 0;
+      }
 
-          return {
-            name: courier.name,
-            totalDeliveries: courierDeliveries.length,
-            totalRevenue: revenue,
-          };
-        })
-        .sort((a, b) => b.totalDeliveries - a.totalDeliveries);
+      // Calculate courier performance (hanya untuk admin)
+      let performanceData = [];
+      if (isAdmin) {
+        performanceData = allCouriers
+          ?.map((courier) => {
+            const courierDeliveries =
+              deliveries?.filter((delivery) => {
+                return delivery.courier_id === courier.id;
+              }) || [];
+
+            const revenue = courierDeliveries
+              .filter((d) => d.status === "completed")
+              .reduce((sum, d) => sum + (d.customers?.delivery_fee || 0), 0);
+
+            return {
+              name: courier.name,
+              totalDeliveries: courierDeliveries.length,
+              totalRevenue: revenue,
+            };
+          })
+          .sort((a, b) => b.totalDeliveries - a.totalDeliveries);
+      }
 
       setReportData({
         summary: {
@@ -181,7 +243,6 @@ const Laporan = () => {
         },
       });
 
-      // 🔥 RESET KE HALAMAN 1 SETIAP FILTER BARU
       setCurrentPage(1);
     } catch (error) {
       console.error("Error fetching report data:", error);
@@ -191,21 +252,38 @@ const Laporan = () => {
     }
   };
 
+  // Auto-fetch ketika period type berubah
   useEffect(() => {
-    if (
+    const shouldFetch =
       (periodType === "harian" && selectedDate) ||
       (periodType === "bulanan" && selectedMonth) ||
-      (periodType === "custom" && startDate && endDate)
-    ) {
+      (periodType === "custom" && startDate && endDate);
+
+    if (shouldFetch) {
       fetchReportData();
     }
   }, [periodType, selectedDate, selectedMonth, startDate, endDate]);
+
+  // Reset filter ketika period type berubah
+  useEffect(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    if (periodType === "harian" && !selectedDate) {
+      setSelectedDate(today);
+    } else if (periodType === "bulanan" && !selectedMonth) {
+      setSelectedMonth(currentMonth);
+    } else if (periodType === "custom" && (!startDate || !endDate)) {
+      setStartDate(today);
+      setEndDate(today);
+    }
+  }, [periodType]);
 
   const handleApplyFilter = () => {
     fetchReportData();
   };
 
-  // 🔥 FUNGSI PAGINATION
+  // FUNGSI PAGINATION
   const getPaginatedDeliveries = () => {
     if (!reportData?.deliveries) return [];
 
@@ -231,14 +309,20 @@ const Laporan = () => {
           const workbook = XLSX.utils.book_new();
           const excelData = [];
 
-          // === HEADER UTAMA ===
+          // HEADER UTAMA
           excelData.push(["LAPORAN KINERJA OJEK-O"]);
           excelData.push([`Periode: ${reportData.period.label}`]);
+          excelData.push([`Role: ${isAdmin ? "Admin" : "Kurir"}`]);
+          if (!isAdmin) {
+            excelData.push([
+              `Kurir: ${currentUser?.username || currentUser?.name || "-"}`,
+            ]);
+          }
           excelData.push([""]);
 
-          // === 1. SUMMARY ===
+          // 1. SUMMARY
           excelData.push(["1. SUMMARY"]);
-          excelData.push(["Matrix", "", "Hasil"]); // header tabel
+          excelData.push(["Matrix", "", "Hasil"]);
           excelData.push([
             "Total Order",
             "",
@@ -249,32 +333,43 @@ const Laporan = () => {
             "",
             `Rp ${reportData.summary.totalRevenue.toLocaleString()}`,
           ]);
-          excelData.push([
-            "Rata-rata per Hari",
-            "",
-            reportData.summary.averagePerDay,
-          ]);
-          excelData.push(["Kurir Teraktif", "", reportData.summary.topCourier]);
-          excelData.push([""]);
-          excelData.push([""]);
 
-          // === 2. KINERJA KURIR ===
-          excelData.push(["2. KINERJA KURIR"]);
-          excelData.push(["No", "Nama Kurir", "Total Order", "Pendapatan"]);
-
-          reportData.courierPerformance.forEach((courier, index) => {
+          // HANYA TAMPILKAN UNTUK ADMIN
+          if (isAdmin) {
             excelData.push([
-              index + 1,
-              courier.name,
-              courier.totalDeliveries,
-              `Rp ${courier.totalRevenue.toLocaleString()}`,
+              "Rata-rata per Hari",
+              "",
+              reportData.summary.averagePerDay,
             ]);
-          });
+            excelData.push([
+              "Kurir Teraktif",
+              "",
+              reportData.summary.topCourier,
+            ]);
+          }
 
           excelData.push([""]);
           excelData.push([""]);
 
-          // === 3. DETAIL PENGIRIMAN ===
+          // 2. KINERJA KURIR (HANYA UNTUK ADMIN)
+          if (isAdmin && reportData.courierPerformance.length > 0) {
+            excelData.push(["2. KINERJA KURIR"]);
+            excelData.push(["No", "Nama Kurir", "Total Order", "Pendapatan"]);
+
+            reportData.courierPerformance.forEach((courier, index) => {
+              excelData.push([
+                index + 1,
+                courier.name,
+                courier.totalDeliveries,
+                `Rp ${courier.totalRevenue.toLocaleString()}`,
+              ]);
+            });
+
+            excelData.push([""]);
+            excelData.push([""]);
+          }
+
+          // 3. DETAIL PENGIRIMAN
           excelData.push(["3. DETAIL PENGIRIMAN"]);
           excelData.push([
             "No",
@@ -296,22 +391,32 @@ const Laporan = () => {
             ]);
           });
 
-          // === Worksheet ===
+          // Worksheet
           const worksheet = XLSX.utils.aoa_to_sheet(excelData);
 
-          // === Merge Header utama dan Summary ===
+          // Merge Header utama dan Summary
           worksheet["!merges"] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }, // Judul
-            { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }, // Periode
-            // Merge summary isi A&B untuk 4 baris (Total Order s.d Kurir Teraktif)
-            { s: { r: 4, c: 0 }, e: { r: 4, c: 1 } },
-            { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
-            { s: { r: 6, c: 0 }, e: { r: 6, c: 1 } },
-            { s: { r: 7, c: 0 }, e: { r: 7, c: 1 } },
-            { s: { r: 8, c: 0 }, e: { r: 8, c: 1 } },
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+            { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } },
+            ...(isAdmin ? [] : [{ s: { r: 3, c: 0 }, e: { r: 3, c: 5 } }]),
+            {
+              s: { r: isAdmin ? 6 : 7, c: 0 },
+              e: { r: isAdmin ? 6 : 7, c: 1 },
+            },
+            {
+              s: { r: isAdmin ? 7 : 8, c: 0 },
+              e: { r: isAdmin ? 7 : 8, c: 1 },
+            },
+            ...(isAdmin
+              ? [
+                  { s: { r: 8, c: 0 }, e: { r: 8, c: 1 } },
+                  { s: { r: 9, c: 0 }, e: { r: 9, c: 1 } },
+                ]
+              : []),
           ];
 
-          // === Lebar kolom ===
+          // Lebar kolom
           worksheet["!cols"] = [
             { wpx: 35 },
             { wpx: 110 },
@@ -321,7 +426,7 @@ const Laporan = () => {
             { wpx: 100 },
           ];
 
-          // === Style dasar ===
+          // Style dasar
           const borderStyle = {
             top: { style: "thin", color: { rgb: "000000" } },
             left: { style: "thin", color: { rgb: "000000" } },
@@ -347,76 +452,24 @@ const Laporan = () => {
             alignment: { vertical: "center", horizontal: "center" },
           };
 
-          // === Style judul utama ===
-          ["A1", "A2"].forEach((cell) => {
+          // Style judul utama
+          ["A1", "A2", "A3"].forEach((cell) => {
             if (worksheet[cell]) {
               worksheet[cell].s = {
-                font: { bold: true, sz: 14 },
+                font: { bold: true, sz: cell === "A1" ? 14 : 12 },
                 alignment: { horizontal: "center", vertical: "center" },
               };
             }
           });
 
-          // === Hitung posisi dinamis ===
-          const summaryHeaderRow = 4;
-          const summaryStart = 5;
-          const summaryEnd = 8;
-          const courierHeader = summaryEnd + 4;
-          const courierStart = courierHeader + 1;
-          const detailHeader =
-            courierStart + reportData.courierPerformance.length + 3;
-          const detailStart = detailHeader + 1;
-
-          // === Iterasi semua cell dan beri style ===
-          const range = XLSX.utils.decode_range(worksheet["!ref"]);
-          for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-              const ref = XLSX.utils.encode_cell({ r: R, c: C });
-              const cell = worksheet[ref];
-              if (!cell) continue;
-
-              // Summary header
-              if (R === summaryHeaderRow && C <= 2) {
-                cell.s = grayHeader;
-                continue;
-              }
-
-              // Summary isi (dari Total Order s.d Kurir Teraktif)
-              if (R >= summaryStart && R <= summaryEnd && C <= 2) {
-                cell.s = cellBase;
-                if (C === 2) cell.s.alignment.horizontal = "left";
-                continue;
-              }
-
-              // Kinerja Kurir header
-              if (R === courierHeader && C <= 3) {
-                cell.s = grayHeader;
-                continue;
-              }
-
-              // Kinerja Kurir isi
-              if (R >= courierStart && R < detailHeader - 3 && C <= 3) {
-                cell.s = C === 2 ? cellCenter : cellBase;
-                continue;
-              }
-
-              // Detail Pengiriman header
-              if (R === detailHeader && C <= 5) {
-                cell.s = grayHeader;
-                continue;
-              }
-
-              // Detail Pengiriman isi
-              if (R >= detailStart && C <= 5) {
-                cell.s = cellBase;
-                continue;
-              }
-
-              // Semua di luar tabel tidak diberi border
-            }
+          if (!isAdmin && worksheet["A4"]) {
+            worksheet["A4"].s = {
+              font: { bold: true, sz: 12 },
+              alignment: { horizontal: "center", vertical: "center" },
+            };
           }
 
-          // === Simpan file (browser mode) ===
+          // Simpan file
           XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan");
           const wbout = XLSX.write(workbook, {
             bookType: "xlsx",
@@ -425,7 +478,9 @@ const Laporan = () => {
           const blob = new Blob([wbout], { type: "application/octet-stream" });
           saveAs(
             blob,
-            `Laporan_${reportData.period.label.replace(/ /g, "_")}.xlsx`
+            `Laporan_${
+              isAdmin ? "Admin" : "Kurir"
+            }_${reportData.period.label.replace(/ /g, "_")}.xlsx`
           );
 
           setExporting(false);
@@ -499,12 +554,16 @@ const Laporan = () => {
                 color: "#1e293b",
               }}
             >
-              📊 Laporan Pengiriman
+              📊 Laporan Pengiriman {!isAdmin && "(Kurir)"}
             </h1>
             <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
               {reportData
                 ? `Periode: ${reportData.period.label}`
                 : "Pilih periode laporan"}
+              {!isAdmin &&
+                ` • Kurir: ${
+                  currentUser?.username || currentUser?.name || "-"
+                }`}
             </p>
           </div>
         </div>
@@ -651,6 +710,18 @@ const Laporan = () => {
                     boxSizing: "border-box",
                   }}
                 />
+                {/* INFO: Tampilkan info bulan berjalan */}
+                {selectedMonth === new Date().toISOString().slice(0, 7) && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#667eea",
+                      marginTop: "4px",
+                    }}
+                  >
+                    📍 Bulan berjalan - data akan update otomatis
+                  </div>
+                )}
               </div>
             )}
 
@@ -752,18 +823,38 @@ const Laporan = () => {
               </button>
             </div>
           </div>
+
+          {/* INFO DEBUG: Tampilkan info filter yang aktif */}
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "8px 12px",
+              background: "#f0f9ff",
+              borderRadius: "6px",
+              fontSize: "12px",
+              color: "#0369a1",
+            }}
+          >
+            <strong>Filter Aktif:</strong> {periodType} |
+            {periodType === "harian" && ` Tanggal: ${selectedDate}`}
+            {periodType === "bulanan" && ` Bulan: ${selectedMonth}`}
+            {periodType === "custom" && ` Range: ${startDate} s/d ${endDate}`}
+          </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - BERBEDA UNTUK ADMIN VS KURIR */}
         {reportData && (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gridTemplateColumns: isAdmin
+                ? "repeat(auto-fit, minmax(200px, 1fr))"
+                : "repeat(auto-fit, minmax(250px, 1fr))",
               gap: "16px",
               marginBottom: "24px",
             }}
           >
+            {/* Total Pengiriman - TAMPIL UNTUK SEMUA */}
             <div
               style={{
                 background: "white",
@@ -795,6 +886,7 @@ const Laporan = () => {
               </div>
             </div>
 
+            {/* Pendapatan Total - TAMPIL UNTUK SEMUA */}
             <div
               style={{
                 background: "white",
@@ -813,7 +905,7 @@ const Laporan = () => {
                   marginBottom: "4px",
                 }}
               >
-                PENDAPATAN TOTAL
+                {isAdmin ? "PENDAPATAN TOTAL" : "PENDAPATAN SAYA"}
               </div>
               <div
                 style={{
@@ -826,71 +918,80 @@ const Laporan = () => {
               </div>
             </div>
 
-            <div
-              style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                border: "1px solid #e2e8f0",
-                textAlign: "center",
-              }}
-            >
-              <div style={{ fontSize: "24px", marginBottom: "8px" }}>📅</div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#64748b",
-                  fontWeight: "600",
-                  marginBottom: "4px",
-                }}
-              >
-                RATA-RATA / HARI
-              </div>
-              <div
-                style={{
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  color: "#1e293b",
-                }}
-              >
-                {reportData.summary.averagePerDay}
-              </div>
-            </div>
+            {/* HANYA TAMPIL UNTUK ADMIN */}
+            {isAdmin && (
+              <>
+                <div
+                  style={{
+                    background: "white",
+                    padding: "20px",
+                    borderRadius: "12px",
+                    border: "1px solid #e2e8f0",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: "24px", marginBottom: "8px" }}>
+                    📅
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#64748b",
+                      fontWeight: "600",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    RATA-RATA / HARI
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "24px",
+                      fontWeight: "700",
+                      color: "#1e293b",
+                    }}
+                  >
+                    {reportData.summary.averagePerDay}
+                  </div>
+                </div>
 
-            <div
-              style={{
-                background: "white",
-                padding: "20px",
-                borderRadius: "12px",
-                border: "1px solid #e2e8f0",
-                textAlign: "center",
-              }}
-            >
-              <div style={{ fontSize: "24px", marginBottom: "8px" }}>👑</div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#64748b",
-                  fontWeight: "600",
-                  marginBottom: "4px",
-                }}
-              >
-                KURIR TERAKTIF
-              </div>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  color: "#1e293b",
-                }}
-              >
-                {reportData.summary.topCourier}
-              </div>
-            </div>
+                <div
+                  style={{
+                    background: "white",
+                    padding: "20px",
+                    borderRadius: "12px",
+                    border: "1px solid #e2e8f0",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: "24px", marginBottom: "8px" }}>
+                    👑
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#64748b",
+                      fontWeight: "600",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    KURIR TERAKTIF
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "700",
+                      color: "#1e293b",
+                    }}
+                  >
+                    {reportData.summary.topCourier}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Delivery Data Table */}
+        {/* Delivery Data Table - TAMPIL UNTUK SEMUA */}
         {reportData && (
           <div
             style={{
@@ -921,10 +1022,11 @@ const Laporan = () => {
                   color: "#1e293b",
                 }}
               >
-                📦 Data Pengiriman ({reportData.deliveries.length} order)
+                📦 Data Pengiriman {!isAdmin && "Saya"} (
+                {reportData.deliveries.length} order)
               </h3>
 
-              {/* 🔥 PAGINATION CONTROLS - TOP */}
+              {/* PAGINATION CONTROLS - TOP */}
               <div
                 style={{
                   display: "flex",
@@ -992,7 +1094,6 @@ const Laporan = () => {
                     >
                       Tanggal
                     </th>
-                    {/* 🔥 HAPUS KOLOM "No Order" */}
                     <th
                       style={{
                         padding: "12px 16px",
@@ -1006,18 +1107,21 @@ const Laporan = () => {
                     >
                       Customer
                     </th>
-                    <th
-                      style={{
-                        padding: "12px 16px",
-                        textAlign: "center",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        color: "#64748b",
-                        borderBottom: "1px solid #e2e8f0",
-                      }}
-                    >
-                      Kurir
-                    </th>
+                    {/* KOLOM KURIR HANYA UNTUK ADMIN */}
+                    {isAdmin && (
+                      <th
+                        style={{
+                          padding: "12px 16px",
+                          textAlign: "center",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          borderBottom: "1px solid #e2e8f0",
+                        }}
+                      >
+                        Kurir
+                      </th>
+                    )}
                     <th
                       style={{
                         padding: "12px 16px",
@@ -1065,7 +1169,6 @@ const Laporan = () => {
                           "id-ID"
                         )}
                       </td>
-                      {/* 🔥 HAPUS CELL "No Order" */}
                       <td
                         style={{
                           padding: "12px 16px",
@@ -1077,17 +1180,20 @@ const Laporan = () => {
                       >
                         {delivery.customers?.name || "-"}
                       </td>
-                      <td
-                        style={{
-                          padding: "12px 16px",
-                          fontSize: "14px",
-                          color: "#374151",
-                          borderBottom: "1px solid #e2e8f0",
-                        }}
-                        className="mobile-sm-text"
-                      >
-                        {delivery.couriers?.name || "-"}
-                      </td>
+                      {/* KOLOM KURIR HANYA UNTUK ADMIN */}
+                      {isAdmin && (
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: "14px",
+                            color: "#374151",
+                            borderBottom: "1px solid #e2e8f0",
+                          }}
+                          className="mobile-sm-text"
+                        >
+                          {delivery.couriers?.name || "-"}
+                        </td>
+                      )}
                       <td
                         style={{
                           padding: "12px 16px",
@@ -1158,7 +1264,7 @@ const Laporan = () => {
               </div>
             )}
 
-            {/* 🔥 PAGINATION - BOTTOM */}
+            {/* PAGINATION - BOTTOM */}
             {totalPages > 1 && (
               <div
                 style={{
@@ -1213,7 +1319,6 @@ const Laporan = () => {
                         (page >= currentPage - 1 && page <= currentPage + 1)
                     )
                     .map((page, index, array) => {
-                      // Add ellipsis for gaps
                       const showEllipsis =
                         index > 0 && page - array[index - 1] > 1;
                       return (
@@ -1268,8 +1373,8 @@ const Laporan = () => {
           </div>
         )}
 
-        {/* Courier Performance Table */}
-        {reportData && reportData.courierPerformance.length > 0 && (
+        {/* Courier Performance Table - HANYA UNTUK ADMIN */}
+        {isAdmin && reportData && reportData.courierPerformance.length > 0 && (
           <div
             style={{
               background: "white",
