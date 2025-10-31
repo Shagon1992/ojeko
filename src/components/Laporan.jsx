@@ -308,18 +308,16 @@ const Laporan = () => {
         ([XLSX, { saveAs }]) => {
           const workbook = XLSX.utils.book_new();
           const excelData = [];
-
+  
           // HEADER UTAMA
           excelData.push(["LAPORAN KINERJA OJEK-O"]);
           excelData.push([`Periode: ${reportData.period.label}`]);
-          excelData.push([`Role: ${isAdmin ? "Admin" : "Kurir"}`]);
+          excelData.push([`Role: ${isAdmin ? 'Admin' : 'Kurir'}`]);
           if (!isAdmin) {
-            excelData.push([
-              `Kurir: ${currentUser?.username || currentUser?.name || "-"}`,
-            ]);
+            excelData.push([`Kurir: ${currentUser?.username || currentUser?.name || '-'}`]);
           }
           excelData.push([""]);
-
+  
           // 1. SUMMARY
           excelData.push(["1. SUMMARY"]);
           excelData.push(["Matrix", "", "Hasil"]);
@@ -333,7 +331,7 @@ const Laporan = () => {
             "",
             `Rp ${reportData.summary.totalRevenue.toLocaleString()}`,
           ]);
-
+          
           // HANYA TAMPILKAN UNTUK ADMIN
           if (isAdmin) {
             excelData.push([
@@ -341,21 +339,17 @@ const Laporan = () => {
               "",
               reportData.summary.averagePerDay,
             ]);
-            excelData.push([
-              "Kurir Teraktif",
-              "",
-              reportData.summary.topCourier,
-            ]);
+            excelData.push(["Kurir Teraktif", "", reportData.summary.topCourier]);
           }
-
+          
           excelData.push([""]);
           excelData.push([""]);
-
+  
           // 2. KINERJA KURIR (HANYA UNTUK ADMIN)
           if (isAdmin && reportData.courierPerformance.length > 0) {
             excelData.push(["2. KINERJA KURIR"]);
             excelData.push(["No", "Nama Kurir", "Total Order", "Pendapatan"]);
-
+  
             reportData.courierPerformance.forEach((courier, index) => {
               excelData.push([
                 index + 1,
@@ -364,11 +358,11 @@ const Laporan = () => {
                 `Rp ${courier.totalRevenue.toLocaleString()}`,
               ]);
             });
-
+  
             excelData.push([""]);
             excelData.push([""]);
           }
-
+  
           // 3. DETAIL PENGIRIMAN
           excelData.push(["3. DETAIL PENGIRIMAN"]);
           excelData.push([
@@ -379,7 +373,7 @@ const Laporan = () => {
             "Alamat",
             "Kurir",
           ]);
-
+  
           reportData.deliveries.forEach((delivery, index) => {
             excelData.push([
               index + 1,
@@ -390,32 +384,44 @@ const Laporan = () => {
               delivery.couriers?.name || "-",
             ]);
           });
-
+  
           // Worksheet
           const worksheet = XLSX.utils.aoa_to_sheet(excelData);
-
-          // Merge Header utama dan Summary
-          worksheet["!merges"] = [
+  
+          // 🔥 PERBAIKAN: Merge cells yang benar
+          const merges = [
+            // Header utama
             { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
             { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
             { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } },
-            ...(isAdmin ? [] : [{ s: { r: 3, c: 0 }, e: { r: 3, c: 5 } }]),
-            {
-              s: { r: isAdmin ? 6 : 7, c: 0 },
-              e: { r: isAdmin ? 6 : 7, c: 1 },
-            },
-            {
-              s: { r: isAdmin ? 7 : 8, c: 0 },
-              e: { r: isAdmin ? 7 : 8, c: 1 },
-            },
-            ...(isAdmin
-              ? [
-                  { s: { r: 8, c: 0 }, e: { r: 8, c: 1 } },
-                  { s: { r: 9, c: 0 }, e: { r: 9, c: 1 } },
-                ]
-              : []),
+            ...(!isAdmin ? [{ s: { r: 3, c: 0 }, e: { r: 3, c: 5 } }] : []),
+            
+            // 🔥 PERBAIKAN: Merge "Matrix" (A6+B6)
+            { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
+            
+            // Summary items
+            { s: { r: 6, c: 0 }, e: { r: 6, c: 1 } },
+            { s: { r: 7, c: 0 }, e: { r: 7, c: 1 } },
+            ...(isAdmin ? [
+              { s: { r: 8, c: 0 }, e: { r: 8, c: 1 } },
+              { s: { r: 9, c: 0 }, e: { r: 9, c: 1 } },
+            ] : []),
           ];
-
+  
+          // Tambahkan merge untuk kinerja kurir jika admin
+          if (isAdmin && reportData.courierPerformance.length > 0) {
+            const courierHeaderRow = isAdmin ? 11 : 10;
+            merges.push({ s: { r: courierHeaderRow, c: 0 }, e: { r: courierHeaderRow, c: 3 } });
+          }
+  
+          // Tambahkan merge untuk detail pengiriman
+          const detailHeaderRow = isAdmin 
+            ? (13 + reportData.courierPerformance.length)
+            : 12;
+          merges.push({ s: { r: detailHeaderRow, c: 0 }, e: { r: detailHeaderRow, c: 5 } });
+  
+          worksheet["!merges"] = merges;
+  
           // Lebar kolom
           worksheet["!cols"] = [
             { wpx: 35 },
@@ -425,50 +431,102 @@ const Laporan = () => {
             { wpx: 150 },
             { wpx: 100 },
           ];
-
-          // Style dasar
+  
+          // 🔥 PERBAIKAN: Style yang lebih baik
           const borderStyle = {
             top: { style: "thin", color: { rgb: "000000" } },
             left: { style: "thin", color: { rgb: "000000" } },
             bottom: { style: "thin", color: { rgb: "000000" } },
             right: { style: "thin", color: { rgb: "000000" } },
           };
-
+  
           const grayHeader = {
-            font: { bold: true },
+            font: { bold: true, color: { rgb: "000000" } },
             fill: { fgColor: { rgb: "D9D9D9" } },
             alignment: { horizontal: "center", vertical: "center" },
             border: borderStyle,
           };
-
+  
           const cellBase = {
             border: borderStyle,
             alignment: { vertical: "center", horizontal: "left" },
-            fill: { fgColor: { rgb: "FFFFFF" } },
           };
-
+  
           const cellCenter = {
             ...cellBase,
             alignment: { vertical: "center", horizontal: "center" },
           };
-
-          // Style judul utama
-          ["A1", "A2", "A3"].forEach((cell) => {
-            if (worksheet[cell]) {
-              worksheet[cell].s = {
-                font: { bold: true, sz: cell === "A1" ? 14 : 12 },
-                alignment: { horizontal: "center", vertical: "center" },
-              };
+  
+          // 🔥 TERAPKAN STYLE KE SEMUA CELL YANG PERLU
+          const range = XLSX.utils.decode_range(worksheet["!ref"]);
+          
+          for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+              const cell_ref = XLSX.utils.encode_cell({ r: R, c: C });
+              if (!worksheet[cell_ref]) continue;
+              
+              // Header utama (A1, A2, A3, A4)
+              if (R <= 3) {
+                worksheet[cell_ref].s = {
+                  font: { bold: true, sz: R === 0 ? 14 : 12 },
+                  alignment: { horizontal: "center", vertical: "center" },
+                };
+                continue;
+              }
+  
+              // Summary header (Matrix & Hasil)
+              if (R === 5 && C <= 2) {
+                worksheet[cell_ref].s = grayHeader;
+                continue;
+              }
+  
+              // Summary data (Total Order, Total Revenue, dll)
+              if (R >= 6 && R <= (isAdmin ? 9 : 7) && C <= 2) {
+                worksheet[cell_ref].s = {
+                  ...cellBase,
+                  alignment: { 
+                    vertical: "center", 
+                    horizontal: C === 2 ? "left" : "left" 
+                  }
+                };
+                continue;
+              }
+  
+              // Kinerja Kurir header (hanya admin)
+              if (isAdmin && reportData.courierPerformance.length > 0) {
+                const courierHeaderRow = 11;
+                if (R === courierHeaderRow && C <= 3) {
+                  worksheet[cell_ref].s = grayHeader;
+                  continue;
+                }
+  
+                // Kinerja Kurir data
+                const courierStartRow = courierHeaderRow + 1;
+                const courierEndRow = courierStartRow + reportData.courierPerformance.length - 1;
+                if (R >= courierStartRow && R <= courierEndRow && C <= 3) {
+                  worksheet[cell_ref].s = C === 0 ? cellCenter : cellBase;
+                  continue;
+                }
+              }
+  
+              // Detail Pengiriman header
+              const detailHeaderRow = isAdmin 
+                ? (13 + reportData.courierPerformance.length)
+                : 12;
+              if (R === detailHeaderRow && C <= 5) {
+                worksheet[cell_ref].s = grayHeader;
+                continue;
+              }
+  
+              // Detail Pengiriman data
+              const detailStartRow = detailHeaderRow + 1;
+              if (R >= detailStartRow && C <= 5) {
+                worksheet[cell_ref].s = C === 0 ? cellCenter : cellBase;
+                continue;
+              }
             }
-          });
-
-          if (!isAdmin && worksheet["A4"]) {
-            worksheet["A4"].s = {
-              font: { bold: true, sz: 12 },
-              alignment: { horizontal: "center", vertical: "center" },
-            };
           }
-
+  
           // Simpan file
           XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan");
           const wbout = XLSX.write(workbook, {
@@ -478,11 +536,9 @@ const Laporan = () => {
           const blob = new Blob([wbout], { type: "application/octet-stream" });
           saveAs(
             blob,
-            `Laporan_${
-              isAdmin ? "Admin" : "Kurir"
-            }_${reportData.period.label.replace(/ /g, "_")}.xlsx`
+            `Laporan_${isAdmin ? 'Admin' : 'Kurir'}_${reportData.period.label.replace(/ /g, "_")}.xlsx`
           );
-
+  
           setExporting(false);
           setTimeout(() => alert("✅ Excel berhasil diexport!"), 500);
         }
@@ -1583,3 +1639,4 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
