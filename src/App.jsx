@@ -88,119 +88,213 @@ function App() {
     };
   }, []);
 
-  // 🔥 SIMPLE NOTIFICATION SETUP - TANPA ONESIGNAL COMPLEX
+  // 🔥 ENHANCED NOTIFICATION SETUP
+  // 🔥 ENHANCED NOTIFICATION SETUP
   useEffect(() => {
-    const setupSimpleNotifications = () => {
+    const setupEnhancedNotifications = async () => {
       const currentUser = JSON.parse(localStorage.getItem("user"));
       if (!currentUser?.courier_id) return;
-
-      console.log('👤 Setting up notifications for courier:', currentUser.courier_id);
-
-      // Cek jika browser support notifications
+  
+      console.log('👤 Setting up enhanced notifications for courier:', currentUser.courier_id);
+  
+      // 1. Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        try {
+          // Unregister existing service workers first
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let registration of registrations) {
+            await registration.unregister();
+            console.log('🗑️ Unregistered old service worker');
+          }
+  
+          // Register new service worker
+          const registration = await navigator.serviceWorker.register('/sw.js', {
+            scope: '/',
+            updateViaCache: 'none'
+          });
+          
+          console.log('✅ Service Worker registered:', registration);
+  
+          // Wait for service worker to be ready
+          await navigator.serviceWorker.ready;
+          console.log('✅ Service Worker ready');
+  
+        } catch (error) {
+          console.error('❌ Service Worker registration failed:', error);
+        }
+      }
+  
+      // 2. Notification Permission
       if (!("Notification" in window)) {
         console.log("❌ Browser tidak support notifications");
         return;
       }
-
-      // Cek permission status
+  
+      // 3. Permission Handling dengan Enhanced UX
       if (Notification.permission === "granted") {
         console.log('✅ Notifications already enabled');
-        registerCourierDevice(currentUser.courier_id);
+        await registerCourierDevice(currentUser.courier_id);
+        showNotificationWelcome(currentUser.courier_id);
       } else if (Notification.permission === "default") {
-        // Tampilkan button untuk minta permission
+        // Tampilkan enhanced permission button
         setTimeout(() => {
-          showNotificationButton(currentUser.courier_id);
-        }, 3000);
+          showEnhancedPermissionButton(currentUser.courier_id);
+        }, 2000);
       }
     };
-
-    const showNotificationButton = (courierId) => {
-      if (document.getElementById('notification-btn')) return;
-
+  
+    const showEnhancedPermissionButton = (courierId) => {
+      if (document.getElementById('notification-permission-btn')) return;
+  
       const button = document.createElement('button');
-      button.id = 'notification-btn';
-      button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI ORDERAN';
+      button.id = 'notification-permission-btn';
+      button.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>🔔</span>
+          <span>AKTIFKAN NOTIFIKASI ORDERAN</span>
+        </div>
+        <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
+          Dapatkan pemberitahuan orderan baru secara real-time
+        </div>
+      `;
       button.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        background: #10b981;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         color: white;
         border: none;
-        padding: 12px 16px;
-        border-radius: 8px;
+        padding: 16px 20px;
+        border-radius: 12px;
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         z-index: 10000;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+        max-width: 280px;
+        text-align: left;
+        transition: all 0.3s ease;
       `;
-
+  
       button.onclick = async () => {
-        button.innerHTML = '⏳ MEMPROSES...';
+        button.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="spinner" style="width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span>MEMPROSES...</span>
+          </div>
+        `;
         button.style.background = '#6b7280';
+        button.style.cursor = 'not-allowed';
         
         try {
-          // Request permission menggunakan Browser Native API
           const permission = await Notification.requestPermission();
           
           if (permission === "granted") {
             console.log('✅ Notification permission granted');
             await registerCourierDevice(courierId);
-            button.innerHTML = '✅ NOTIFIKASI AKTIF!';
-            button.style.background = '#059669';
-            setTimeout(() => button.remove(), 2000);
             
-            // Show test notification
-            new Notification("Ojek-O Delivery", {
-              body: "Notifikasi berhasil diaktifkan! Anda akan dapat pemberitahuan orderan baru.",
-              icon: "/icons/icon-192x192.png"
-            });
+            button.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span>✅</span>
+                <span>NOTIFIKASI AKTIF!</span>
+              </div>
+              <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
+                Anda akan dapat pemberitahuan orderan
+              </div>
+            `;
+            button.style.background = '#059669';
+            
+            // Show welcome notification
+            showNotificationWelcome(courierId);
+            
+            setTimeout(() => button.remove(), 3000);
           } else {
-            button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
+            button.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span>🔔</span>
+                <span>IZINKAN NOTIFIKASI</span>
+              </div>
+              <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">
+                  Klik "Izinkan" saat diminta browser
+              </div>
+            `;
             button.style.background = '#10b981';
-            alert('Silakan izinkan notifikasi untuk mendapatkan pemberitahuan orderan baru.');
+            button.style.cursor = 'pointer';
+            
+            alert('❌ Silakan izinkan notifikasi untuk mendapatkan pemberitahuan orderan baru. Klik ikon gembok/gembok di address bar browser Anda dan izinkan notifikasi.');
           }
         } catch (error) {
           console.error('Permission error:', error);
           button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
           button.style.background = '#10b981';
+          button.style.cursor = 'pointer';
         }
       };
-
+  
+      // Hover effects
+      button.onmouseenter = () => {
+        if (!button.innerHTML.includes('MEMPROSES')) {
+          button.style.transform = 'translateY(-2px)';
+          button.style.boxShadow = '0 12px 30px rgba(16, 185, 129, 0.4)';
+        }
+      };
+      
+      button.onmouseleave = () => {
+        button.style.transform = 'translateY(0)';
+        button.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.3)';
+      };
+  
       document.body.appendChild(button);
-      console.log('✅ Notification button displayed');
+      console.log('✅ Enhanced notification permission button displayed');
     };
-
+  
+    const showNotificationWelcome = (courierId) => {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("🎉 Notifikasi Ojek-O Aktif!", {
+          body: "Anda akan mendapatkan pemberitahuan orderan baru secara real-time. Selamat bekerja!",
+          icon: "/icons/icon-192x192.png",
+          tag: "welcome",
+          requireInteraction: true
+        });
+      }
+    };
+  
     const registerCourierDevice = async (courierId) => {
       try {
-        // Simple insert saja - biar database handle duplicates
         const deviceToken = `browser-${courierId}-${Date.now()}`;
         
         const { error } = await supabase
           .from('courier_devices')
-          .insert({
+          .upsert({
             courier_id: courierId,
             device_token: deviceToken,
-            platform: 'web', 
-            is_active: true
+            platform: 'web',
+            is_active: true,
+            last_active: new Date().toISOString()
+          }, {
+            onConflict: 'courier_id,device_token'
           });
-    
+  
         if (error) {
-          console.error('❌ Insert device error:', error);
+          console.error('❌ Device registration error:', error);
         } else {
           console.log('✅ Device registered in database');
+          
+          // Simpan device token di localStorage untuk penggunaan berikutnya
+          localStorage.setItem('device_token', deviceToken);
         }
       } catch (error) {
         console.error('❌ Device registration error:', error);
       }
     };
-
+  
     if (user) {
-      console.log('👤 User logged in, setting up notifications...');
-      setupSimpleNotifications();
+      console.log('👤 User logged in, setting up enhanced notifications...');
+      setupEnhancedNotifications();
     }
   }, [user]);
+
+
 
   // Close mobile menu when resizing to desktop
   useEffect(() => {
