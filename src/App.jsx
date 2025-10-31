@@ -107,23 +107,22 @@ function App() {
 
     const registerCourierDevice = async (courierId) => {
       try {
-        // Simpan status ke database (device token kita simpan sebagai 'browser-native')
+        // Simple insert saja - biar database handle duplicates
+        const deviceToken = `browser-${courierId}-${Date.now()}`;
+        
         const { error } = await supabase
           .from('courier_devices')
-          .upsert({
+          .insert({
             courier_id: courierId,
-            device_token: 'browser-native-' + Date.now(), // Unique identifier
-            platform: 'web',
+            device_token: deviceToken,
+            platform: 'web', 
             is_active: true
-          }, { 
-            onConflict: 'courier_id,device_token',
-            onConflict: ['courier_id'] // Fallback conflict resolution
           });
-
+    
         if (error) {
-          console.error('❌ Database error:', error);
+          console.error('❌ Insert device error:', error);
         } else {
-          console.log('✅ Courier device registered in database');
+          console.log('✅ Device registered in database');
         }
       } catch (error) {
         console.error('❌ Device registration error:', error);
