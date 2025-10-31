@@ -1197,13 +1197,16 @@ const DeliveryCard = ({
     if (!konfirmasi) return;
   
     try {
-      await onUpdateCourier(delivery.id, selectedCourier);
+      // 🔥 PANGGIL FUNGSI DARI PARENT TANPA SETSHOWMODAL
+      const success = await onUpdateCourier(delivery.id, selectedCourier);
       
-      // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
-      await sendEnhancedNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
+      if (success) {
+        // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
+        await sendEnhancedNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
         
-      setShowCourierModal(false);
-      alert(`Kurir berhasil diganti menjadi ${courier.name}`);
+        setShowCourierModal(false); // 🔥 INI BARU DIPANGGIL
+        alert(`Kurir berhasil diganti menjadi ${courier.name}`);
+      }
     } catch (error) {
       alert("Error: " + error.message);
     }
@@ -2132,21 +2135,22 @@ const Deliveries = () => {
     }
   };
 
-  // Update delivery courier
+  // Update delivery courier - DI KOMPONEN UTAMA
   const handleUpdateCourier = async (deliveryId, courierId) => {
     try {
       await updateDeliveryCourier(deliveryId, courierId);
   
-      // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
+      // 🔥 ENHANCED NOTIFICATION
       const delivery = deliveries.find(d => d.id === deliveryId);
       if (delivery && courierId) {
         await sendEnhancedNotification(courierId, delivery.customers?.name, "ditugaskan");
       }
         
-      setShowCourierModal(false);
-      alert(`Kurir berhasil diganti menjadi ${courier.name}`);
+      fetchData(); // Refresh data saja
+      return true; // Beri return value
     } catch (error) {
       alert("Error: " + error.message);
+      return false;
     }
   };
 
@@ -3161,5 +3165,6 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
