@@ -72,11 +72,6 @@ const CustomerFormModal = ({
     const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${RS_AMINAH_COORDINATES.lat},${RS_AMINAH_COORDINATES.lng}&destination=${customerLat},${customerLng}&travelmode=driving`;
 
     window.open(mapsUrl, "_blank");
-
-    // Beri feedback ke user
-    alert(
-      "🗺️ Membuka Google Maps Direction...\n\nAnda bisa lihat jarak dan rute dari RS Aminah ke lokasi ini."
-    );
   };
 
   // Calculate delivery fee dari jarak
