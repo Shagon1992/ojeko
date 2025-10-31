@@ -418,7 +418,7 @@ const Laporan = () => {
   
           // Tambahkan merge untuk detail pengiriman
           const detailHeaderRow = isAdmin 
-            ? (17 + reportData.courierPerformance.length)
+            ? (16 + reportData.courierPerformance.length)
             : 10;
           merges.push({ s: { r: detailHeaderRow, c: 0 }, e: { r: detailHeaderRow, c: 5 } });
   
@@ -1722,6 +1722,7 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
 
 
