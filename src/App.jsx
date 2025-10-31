@@ -23,7 +23,7 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   // 🔥 ONESIGNAL INITIALIZATION
-  // 🔥 ONESIGNAL INITIALIZATION - ULTRA SIMPLE VERSION
+  // 🔥 ONESIGNAL INITIALIZATION - CORRECT VERSION
   useEffect(() => {
     const registerDeviceToken = () => {
       try {
@@ -34,76 +34,57 @@ function App() {
           return;
         }
   
-        console.log('👤 Attempting device registration for courier:', currentUser.courier_id);
+        console.log('👤 Starting device registration...');
   
-        // Approach: Tunggu OneSignal SDK fully loaded (bisa sampai 5-10 detik)
-        let retryCount = 0;
-        const maxRetries = 20; // 20 retries = 20 detik
-        
-        const checkOneSignal = () => {
-          // Cek jika OneSignal sudah ready dengan cara yang berbeda
-          if (window.OneSignal && window.OneSignal.getUserId) {
-            console.log('🎯 OneSignal SDK found, getting device ID...');
-            
-            // Gunakan setTimeout untuk avoid blocking
-            setTimeout(async () => {
-              try {
-                const deviceId = await window.OneSignal.getUserId();
-                console.log('📱 Device ID received:', deviceId);
-                
-                if (deviceId) {
-                  // Simpan ke database
-                  const { error } = await supabase
-                    .from('courier_devices')
-                    .upsert({
-                      courier_id: currentUser.courier_id,
-                      device_token: deviceId,
-                      platform: 'web',
-                      is_active: true
-                    }, {
-                      onConflict: 'courier_id,device_token'
-                    });
+        // Gunakan OneSignalDeferred approach yang benar
+        if (window.OneSignalDeferred) {
+          window.OneSignalDeferred.push(async function(OneSignal) {
+            try {
+              console.log('🎯 OneSignal SDK ready, getting device ID...');
+              
+              // Tunggu sedikit untuk memastikan OneSignal fully initialized
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Dapatkan device ID dengan cara yang benar
+              const deviceId = await OneSignal.getUserId();
+              console.log('📱 Device ID:', deviceId);
+              
+              if (deviceId) {
+                // Simpan ke database
+                const { error } = await supabase
+                  .from('courier_devices')
+                  .upsert({
+                    courier_id: currentUser.courier_id,
+                    device_token: deviceId,
+                    platform: 'web',
+                    is_active: true
+                  }, {
+                    onConflict: 'courier_id,device_token'
+                  });
   
-                  if (error) {
-                    console.error('❌ Database error:', error);
-                  } else {
-                    console.log('✅ Device token successfully registered!');
-                    
-                    // Cek di database
-                    const { data: devices } = await supabase
-                      .from('courier_devices')
-                      .select('*')
-                      .eq('courier_id', currentUser.courier_id);
-                    
-                    console.log('📊 Current devices in DB:', devices);
-                  }
+                if (error) {
+                  console.error('❌ Database error:', error);
                 } else {
-                  console.log('⏳ Device ID not available yet, retrying...');
-                  if (retryCount < maxRetries) {
-                    retryCount++;
-                    setTimeout(checkOneSignal, 1000);
-                  }
+                  console.log('✅ Device token successfully registered!');
+                  
+                  // Verify di database
+                  const { data: devices } = await supabase
+                    .from('courier_devices')
+                    .select('*')
+                    .eq('courier_id', currentUser.courier_id);
+                  
+                  console.log('📊 Devices in database:', devices);
                 }
-              } catch (error) {
-                console.error('❌ getUserId error:', error);
+              } else {
+                console.log('⏳ Device ID not available yet (user mungkin belum allow notification)');
               }
-            }, 100);
-            
-          } else {
-            // OneSignal belum ready, retry
-            retryCount++;
-            console.log(`🔄 Waiting for OneSignal SDK... (${retryCount}/${maxRetries})`);
-            
-            if (retryCount < maxRetries) {
-              setTimeout(checkOneSignal, 1000);
-            } else {
-              console.error('❌ OneSignal SDK timeout after 20 seconds');
+            } catch (error) {
+              console.error('❌ OneSignal getUserId error:', error);
             }
-          }
-        };
-        
-        // Start checking
-        setTimeout(checkOneSignal, 3000); // Tunggu 3 detik pertama
+          });
+        } else {
+          console.error('❌ OneSignalDeferred not available');
+        }
         
       } catch (error) {
         console.error('❌ Device registration error:', error);
@@ -112,7 +93,8 @@ function App() {
   
     if (user) {
       console.log('👤 User logged in, starting device registration...');
-      registerDeviceToken();
+      // Tunggu 3 detik untuk pastikan OneSignal SDK fully loaded
+      setTimeout(registerDeviceToken, 3000);
     }
   }, [user]);
 
