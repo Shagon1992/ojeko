@@ -5,14 +5,13 @@ import Couriers from "./components/Couriers";
 import Customers from "./components/Customers";
 import Deliveries from "./components/Deliveries";
 import DBCourier from "./components/DBCourier";
-import Laporan from "./components/Laporan"; // ✅ TAMBAH INI
-import ImportCustomers from "./components/ImportCustomers"; // ✅ TAMBAH INI
+import Laporan from "./components/Laporan";
+import ImportCustomers from "./components/ImportCustomers";
 import Settings from "./components/Settings/Settings";
 import "./App.css";
 
-// 🔥 IMPORT ONESIGNAL
-import OneSignal from "react-onesignal";
-import { supabase } from "./lib/supabase"; // Pastikan path ini sesuai
+// 🔥 IMPORT SUPABASE SAJA - HAPUS ONESIGNAL
+import { supabase } from "./lib/supabase";
 
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
@@ -22,141 +21,121 @@ function App() {
   // 🎯 PERBAIKAN: Definisikan isAdmin di sini
   const isAdmin = user?.role === "admin";
 
-  // 🔥 ONESIGNAL INITIALIZATION
-// 🔥 ONESIGNAL - FIXED PERMISSION VERSION
-useEffect(() => {
-  const setupOneSignal = () => {
-    const currentUser = JSON.parse(localStorage.getItem("user"));
-    if (!currentUser?.courier_id) return;
+  // 🔥 SIMPLE NOTIFICATION SETUP - TANPA ONESIGNAL COMPLEX
+  useEffect(() => {
+    const setupSimpleNotifications = () => {
+      const currentUser = JSON.parse(localStorage.getItem("user"));
+      if (!currentUser?.courier_id) return;
 
-    console.log('👤 Setting up OneSignal for courier:', currentUser.courier_id);
+      console.log('👤 Setting up notifications for courier:', currentUser.courier_id);
 
-    // Tampilkan button setelah 3 detik
-    setTimeout(() => {
-      showSmartPermissionButton(currentUser.courier_id);
-    }, 3000);
-  };
+      // Cek jika browser support notifications
+      if (!("Notification" in window)) {
+        console.log("❌ Browser tidak support notifications");
+        return;
+      }
 
-  const showSmartPermissionButton = (courierId) => {
-    if (document.getElementById('notification-btn')) return;
-
-    const button = document.createElement('button');
-    button.id = 'notification-btn';
-    button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI ORDERAN';
-    button.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #10b981;
-      color: white;
-      border: none;
-      padding: 15px 20px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      z-index: 10000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    `;
-
-    button.onclick = async () => {
-      button.innerHTML = '⏳ MEMPROSES...';
-      button.style.background = '#6b7280';
-      
-      try {
-        console.log('🎯 Checking current permission state...');
-        
-        // Cek status permission saat ini
-        const permission = await window.OneSignal.getNotificationPermission();
-        console.log('📱 Current permission:', permission);
-        
-        if (permission === 'granted') {
-          // User sudah allow, langsung ambil device token
-          console.log('✅ Permission already granted, getting device token...');
-          const userId = await window.OneSignal.getUserId();
-          if (userId) {
-            await saveDeviceToken(userId, courierId);
-            button.innerHTML = '✅ NOTIFIKASI AKTIF!';
-            button.style.background = '#059669';
-            setTimeout(() => button.remove(), 2000);
-          } else {
-            button.innerHTML = '❌ TOKEN TIDAK ADA';
-            button.style.background = '#dc2626';
-            console.error('User ID tidak tersedia meski permission granted');
-          }
-        } else if (permission === 'default') {
-          // User belum memutuskan, tampilkan prompt
-          console.log('🎯 Showing permission prompt...');
-          await window.OneSignal.showSlidedownPrompt();
-          
-          // Tunggu dan cek lagi
-          setTimeout(async () => {
-            const newPermission = await window.OneSignal.getNotificationPermission();
-            if (newPermission === 'granted') {
-              const userId = await window.OneSignal.getUserId();
-              if (userId) {
-                await saveDeviceToken(userId, courierId);
-                button.innerHTML = '✅ NOTIFIKASI AKTIF!';
-                button.style.background = '#059669';
-                setTimeout(() => button.remove(), 2000);
-              }
-            } else {
-              button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
-              button.style.background = '#10b981';
-            }
-          }, 3000);
-        } else {
-          // Permission denied, beri instruksi manual
-          console.log('❌ Permission denied, showing manual instructions');
-          button.innerHTML = '🔔 IZINKAN MANUAL';
-          button.style.background = '#f59e0b';
-          alert(
-            'Untuk mengaktifkan notifikasi:\n\n' +
-            '1. Klik 🔒 icon di address bar\n' +
-            '2. Pilih "Site settings"\n' + 
-            '3. Cari "Notifications"\n' +
-            '4. Pilih "Allow"\n' +
-            '5. Refresh halaman'
-          );
-        }
-      } catch (error) {
-        console.error('Permission error:', error);
-        button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
-        button.style.background = '#10b981';
+      // Cek permission status
+      if (Notification.permission === "granted") {
+        console.log('✅ Notifications already enabled');
+        registerCourierDevice(currentUser.courier_id);
+      } else if (Notification.permission === "default") {
+        // Tampilkan button untuk minta permission
+        setTimeout(() => {
+          showNotificationButton(currentUser.courier_id);
+        }, 3000);
       }
     };
 
-    document.body.appendChild(button);
-    console.log('✅ Smart permission button displayed');
-  };
+    const showNotificationButton = (courierId) => {
+      if (document.getElementById('notification-btn')) return;
 
-  const saveDeviceToken = async (deviceId, courierId) => {
-    console.log('💾 Saving device token:', deviceId);
-    const { error } = await supabase
-      .from('courier_devices')
-      .upsert({
-        courier_id: courierId,
-        device_token: deviceId,
-        platform: 'web',
-        is_active: true
-      }, { onConflict: 'courier_id,device_token' });
+      const button = document.createElement('button');
+      button.id = 'notification-btn';
+      button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI ORDERAN';
+      button.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #10b981;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      `;
 
-    if (error) {
-      console.error('❌ Database error:', error);
-      alert('Gagal menyimpan token: ' + error.message);
-    } else {
-      console.log('✅ Device token saved successfully!');
-      alert('🎉 NOTIFIKASI BERHASIL DIAKTIFKAN!\n\nAnda akan menerima pemberitahuan ketika ada orderan baru.');
+      button.onclick = async () => {
+        button.innerHTML = '⏳ MEMPROSES...';
+        button.style.background = '#6b7280';
+        
+        try {
+          // Request permission menggunakan Browser Native API
+          const permission = await Notification.requestPermission();
+          
+          if (permission === "granted") {
+            console.log('✅ Notification permission granted');
+            await registerCourierDevice(courierId);
+            button.innerHTML = '✅ NOTIFIKASI AKTIF!';
+            button.style.background = '#059669';
+            setTimeout(() => button.remove(), 2000);
+            
+            // Show test notification
+            new Notification("Ojek-O Delivery", {
+              body: "Notifikasi berhasil diaktifkan! Anda akan dapat pemberitahuan orderan baru.",
+              icon: "/icons/icon-192x192.png"
+            });
+          } else {
+            button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
+            button.style.background = '#10b981';
+            alert('Silakan izinkan notifikasi untuk mendapatkan pemberitahuan orderan baru.');
+          }
+        } catch (error) {
+          console.error('Permission error:', error);
+          button.innerHTML = '🔔 AKTIFKAN NOTIFIKASI';
+          button.style.background = '#10b981';
+        }
+      };
+
+      document.body.appendChild(button);
+      console.log('✅ Notification button displayed');
+    };
+
+    const registerCourierDevice = async (courierId) => {
+      try {
+        // Simpan status ke database (device token kita simpan sebagai 'browser-native')
+        const { error } = await supabase
+          .from('courier_devices')
+          .upsert({
+            courier_id: courierId,
+            device_token: 'browser-native-' + Date.now(), // Unique identifier
+            platform: 'web',
+            is_active: true
+          }, { 
+            onConflict: 'courier_id,device_token',
+            onConflict: ['courier_id'] // Fallback conflict resolution
+          });
+
+        if (error) {
+          console.error('❌ Database error:', error);
+        } else {
+          console.log('✅ Courier device registered in database');
+        }
+      } catch (error) {
+        console.error('❌ Device registration error:', error);
+      }
+    };
+
+    if (user) {
+      console.log('👤 User logged in, setting up notifications...');
+      setupSimpleNotifications();
     }
-  };
+  }, [user]);
 
-  if (user) {
-    console.log('👤 User logged in, starting OneSignal setup...');
-    setupOneSignal();
-  }
-}, [user]);
-
-  
   // Close mobile menu when resizing to desktop
   useEffect(() => {
     const handleResize = () => {
@@ -298,21 +277,20 @@ useEffect(() => {
 
         {/* Desktop Navigation */}
         <div
-          className="desktop-nav" // 🎯 PERBAIKAN: Gunakan CSS class untuk media query
+          className="desktop-nav"
           style={{
             display: "none",
             gap: "8px",
             alignItems: "center",
           }}
         >
-          {/* 🎯 PERBAIKAN: Tambahkan isAdmin={isAdmin} ke semua NavButton */}
           <NavButton
             page="dashboard"
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
             icon="📊"
             label="Dashboard"
-            isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+            isAdmin={isAdmin}
           />
           <NavButton
             page="customers"
@@ -320,7 +298,7 @@ useEffect(() => {
             setCurrentPage={setCurrentPage}
             icon="👥"
             label="Pelanggan"
-            isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+            isAdmin={isAdmin}
           />
           <NavButton
             page="couriers"
@@ -329,7 +307,7 @@ useEffect(() => {
             icon="🚗"
             label="Kurir"
             isAdminOnly={true}
-            isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+            isAdmin={isAdmin}
           />
           <NavButton
             page="deliveries"
@@ -337,7 +315,7 @@ useEffect(() => {
             setCurrentPage={setCurrentPage}
             icon="📦"
             label="Deliveries"
-            isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+            isAdmin={isAdmin}
           />
           <NavButton
             page="laporan"
@@ -396,7 +374,7 @@ useEffect(() => {
 
         {/* Mobile Menu Button */}
         <button
-          className="mobile-menu-button" // 🎯 PERBAIKAN: Gunakan CSS class
+          className="mobile-menu-button"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -445,7 +423,7 @@ useEffect(() => {
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="mobile-menu-overlay" // 🎯 PERBAIKAN: Gunakan CSS class
+          className="mobile-menu-overlay"
           style={{
             position: "fixed",
             top: "73px",
@@ -476,7 +454,6 @@ useEffect(() => {
                 gap: "8px",
               }}
             >
-              {/* 🎯 PERBAIKAN: Tambahkan isAdmin={isAdmin} ke semua MobileNavButton */}
               <MobileNavButton
                 page="dashboard"
                 currentPage={currentPage}
@@ -484,7 +461,7 @@ useEffect(() => {
                 setMobileMenuOpen={setMobileMenuOpen}
                 icon="📊"
                 label="Dashboard"
-                isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+                isAdmin={isAdmin}
               />
               <MobileNavButton
                 page="customers"
@@ -493,7 +470,7 @@ useEffect(() => {
                 setMobileMenuOpen={setMobileMenuOpen}
                 icon="👥"
                 label="Pelanggan"
-                isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+                isAdmin={isAdmin}
               />
               <MobileNavButton
                 page="couriers"
@@ -503,7 +480,7 @@ useEffect(() => {
                 icon="🚗"
                 label="Kurir"
                 isAdminOnly={true}
-                isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+                isAdmin={isAdmin}
               />
               <MobileNavButton
                 page="deliveries"
@@ -512,7 +489,7 @@ useEffect(() => {
                 setMobileMenuOpen={setMobileMenuOpen}
                 icon="📦"
                 label="Deliveries"
-                isAdmin={isAdmin} // 🎯 INI YANG DITAMBAHKAN
+                isAdmin={isAdmin}
               />
               <MobileNavButton
                 page="laporan"
@@ -601,7 +578,6 @@ useEffect(() => {
             }
           }
           
-          /* 🎯 PERBAIKAN: Media queries yang benar */
           .desktop-nav {
             display: none;
           }
@@ -628,7 +604,6 @@ useEffect(() => {
             }
           }
           
-          /* Mobile-first responsive */
           @media (max-width: 767px) {
             .desktop-only {
               display: none !important;
@@ -654,9 +629,8 @@ const NavButton = ({
   icon,
   label,
   isAdminOnly = false,
-  isAdmin = false, // 🎯 Parameter yang diperlukan
+  isAdmin = false,
 }) => {
-  // 🎯 PERBAIKAN: Hide admin-only buttons for couriers
   if (isAdminOnly && !isAdmin) return null;
 
   const isActive = currentPage === page;
@@ -706,9 +680,8 @@ const MobileNavButton = ({
   icon,
   label,
   isAdminOnly = false,
-  isAdmin = false, // 🎯 Parameter yang diperlukan
+  isAdmin = false,
 }) => {
-  // 🎯 PERBAIKAN: Hide admin-only buttons for couriers
   if (isAdminOnly && !isAdmin) return null;
 
   const isActive = currentPage === page;
