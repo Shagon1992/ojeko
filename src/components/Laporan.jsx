@@ -481,7 +481,6 @@ const Laporan = () => {
                 worksheet[cell_ref].s = {
                   font: { bold: true, sz: R === 0 ? 16 : 12 },
                   alignment: { horizontal: "center", vertical: "center" },
-                  fill: { fgColor: { rgb: "E8F4FD" } }, // Biru muda
                 };
                 continue;
               }
@@ -561,9 +560,18 @@ const Laporan = () => {
               }
           
               // 6. DETAIL PENGIRIMAN HEADER
-              const detailHeaderRow = isAdmin 
-                ? (13 + reportData.courierPerformance.length)
-                : 12;
+              let detailHeaderRow;
+              
+              if (isAdmin) {
+                const courierHeaderRow = 13; // posisi header tabel kinerja kurir
+                const courierDataCount = reportData.courierPerformance.length;
+              
+                // Header detail pengiriman muncul 2 baris setelah data kurir terakhir
+                detailHeaderRow = courierHeaderRow + courierDataCount + 2;
+              } else {
+                // Kalau bukan admin (kurir), posisi tetap di baris ke-12 (index 11)
+                detailHeaderRow = 11;
+              }
               if (R === detailHeaderRow) {
                 worksheet[cell_ref].s = {
                   font: { bold: true, color: { rgb: "000000" } },
@@ -1712,6 +1720,7 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
 
 
