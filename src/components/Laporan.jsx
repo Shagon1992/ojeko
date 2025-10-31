@@ -523,7 +523,7 @@ const Laporan = () => {
           
               // 4. KINERJA KURIR HEADER (hanya admin)
               if (isAdmin && reportData.courierPerformance.length > 0) {
-                const courierHeaderRow = 11; // Sesuaikan dengan posisi sebenarnya
+                const courierHeaderRow = 13; // Sesuaikan dengan posisi sebenarnya
                 if (R === courierHeaderRow) {
                   worksheet[cell_ref].s = {
                     font: { bold: true, color: { rgb: "000000" } },
@@ -1712,5 +1712,6 @@ const Laporan = () => {
 };
 
 export default Laporan;
+
 
 
