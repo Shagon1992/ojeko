@@ -23,7 +23,7 @@ function App() {
   const isAdmin = user?.role === "admin";
 
   // 🔥 ONESIGNAL INITIALIZATION
-  // 🔥 ONESIGNAL - HANDLE PERMISSION VERSION
+  // 🔥 ONESIGNAL - DIRECT APPROACH VERSION
   useEffect(() => {
     const registerDeviceToken = () => {
       try {
@@ -35,31 +35,53 @@ function App() {
         if (window.OneSignalDeferred) {
           window.OneSignalDeferred.push(async function(OneSignal) {
             try {
-              console.log('🎯 OneSignal SDK ready');
+              console.log('🎯 OneSignal SDK ready, checking subscription...');
               
-              // Cek permission status dulu
-              const permission = await OneSignal.getNotificationPermission();
-              console.log('📱 Notification permission:', permission);
+              // Tunggu sampai OneSignal fully initialized
+              await new Promise(resolve => setTimeout(resolve, 2000));
               
-              if (permission === 'granted') {
-                // User sudah allow, dapatkan device ID
-                const deviceId = await OneSignal.getUserId();
-                console.log('📱 Device ID:', deviceId);
+              // Cara langsung cek subscription status
+              const subscriptionState = await OneSignal.isPushNotificationsEnabled();
+              console.log('📱 Push enabled:', subscriptionState);
+              
+              if (subscriptionState) {
+                // User sudah subscribed, dapatkan player ID
+                const playerId = await OneSignal.getPlayerId();
+                console.log('🎯 Player ID:', playerId);
                 
-                if (deviceId) {
-                  await saveDeviceToken(deviceId, currentUser.courier_id);
+                if (playerId) {
+                  await saveDeviceToken(playerId, currentUser.courier_id);
                 }
               } else {
-                console.log('⏳ Waiting for user to allow notifications...');
-                // Bisa tambahkan button untuk minta permission manual
+                console.log('⏳ User not subscribed to push notifications');
+                console.log('💡 User perlu allow notification permission');
               }
             } catch (error) {
               console.error('❌ OneSignal error:', error);
+              console.log('🔧 Trying alternative method...');
+              tryAlternativeMethod(currentUser.courier_id);
             }
           });
         }
       } catch (error) {
         console.error('❌ Device registration error:', error);
+      }
+    };
+  
+    const tryAlternativeMethod = async (courierId) => {
+      try {
+        // Coba access langsung dari global OneSignal instance
+        if (window.OneSignal) {
+          const oneSignal = window.OneSignal;
+          const playerId = await oneSignal.getPlayerId();
+          console.log('🎯 Player ID (alternative):', playerId);
+          
+          if (playerId) {
+            await saveDeviceToken(playerId, courierId);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Alternative method failed:', error);
       }
     };
   
@@ -77,10 +99,13 @@ function App() {
         console.error('❌ Database error:', error);
       } else {
         console.log('✅ Device token successfully registered!');
+        console.log('📱 Device ID:', deviceId);
+        console.log('👤 Courier ID:', courierId);
       }
     };
   
     if (user) {
+      console.log('👤 User logged in, starting device registration...');
       setTimeout(registerDeviceToken, 3000);
     }
   }, [user]);
