@@ -1105,21 +1105,43 @@ const DeliveryCard = ({
       alert("Pilih kurir terlebih dahulu!");
       return;
     }
-
+  
     const courier = couriers.find((c) => c.id === selectedCourier);
     if (!courier) return;
-
+  
     const konfirmasi = confirm(
       `Betul akan ganti kurir menjadi ${courier.name}?`
     );
     if (!konfirmasi) return;
-
+  
     try {
       await onUpdateCourier(delivery.id, selectedCourier);
+      
+      // 🔥 KIRIM NOTIFICATION SETELAS BERHASIL GANTI KURIR
+      await sendNotificationToCourier(selectedCourier, delivery.customers?.name);
+      
       setShowCourierModal(false);
       alert(`Kurir berhasil diganti menjadi ${courier.name}`);
     } catch (error) {
       alert("Error: " + error.message);
+    }
+  };
+  
+  // 🔥 TAMBAHKAN FUNCTION INI DI DALAM DELIVERYCARD COMPONENT
+  const sendNotificationToCourier = async (courierId, customerName) => {
+    try {
+      // Test browser notification
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("📦 ORDER BARU - Ojek-O", {
+          body: `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`,
+          icon: "/icons/icon-192x192.png",
+          tag: "new-order"
+        });
+      }
+      
+      console.log('✅ Notification sent to courier:', courierId);
+    } catch (error) {
+      console.error('❌ Send notification error:', error);
     }
   };
 
@@ -3035,6 +3057,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
