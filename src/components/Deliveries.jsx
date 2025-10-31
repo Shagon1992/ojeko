@@ -23,31 +23,7 @@ import MapPickerModal from "./MapPickerModal";
 // =============================================
 // 🔥 ENHANCED NOTIFICATION FUNCTIONS - TAMBAHKAN DI BAWAH IMPORTS
 // =============================================
-
-// Fungsi untuk menyimpan notifikasi ke database
-const saveNotificationToDatabase = async (courierId, customerName, orderType) => {
-  try {
-    const { error } = await supabase
-      .from('notification_logs')
-      .insert({
-        courier_id: courierId,
-        customer_name: customerName,
-        order_type: orderType,
-        status: 'sent',
-        sent_at: new Date().toISOString()
-      });
-
-    if (error) {
-      console.error('❌ Save notification log error:', error);
-    } else {
-      console.log('✅ Notification log saved to database');
-    }
-  } catch (dbError) {
-    console.error('❌ Database error:', dbError);
-  }
-};
-
-// 🔥 ENHANCED NOTIFICATION FUNCTION
+// 🔥 ENHANCED NOTIFICATION FUNCTION - TANPA DATABASE
 const sendEnhancedNotification = async (courierId, customerName, orderType = "baru") => {
   try {
     const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
@@ -63,8 +39,7 @@ const sendEnhancedNotification = async (courierId, customerName, orderType = "ba
           icon: "/icons/icon-192x192.png",
           badge: "/icons/icon-192x192.png",
           tag: "new-order",
-          requireInteraction: true,
-          vibrate: [200, 100, 200]
+          requireInteraction: true
         });
       } else if (Notification.permission === "default") {
         // Auto request permission jika belum
@@ -90,23 +65,12 @@ const sendEnhancedNotification = async (courierId, customerName, orderType = "ba
           badge: "/icons/icon-192x192.png",
           tag: "delivery-notification",
           requireInteraction: true,
-          vibrate: [200, 100, 200],
           actions: [
             {
               action: "open",
               title: "📱 Buka Aplikasi"
-            },
-            {
-              action: "close", 
-              title: "Tutup"
             }
-          ],
-          data: {
-            courierId: courierId,
-            customerName: customerName,
-            orderType: orderType,
-            timestamp: new Date().toISOString()
-          }
+          ]
         });
         
         console.log('✅ PWA Notification sent via Service Worker');
@@ -123,14 +87,11 @@ const sendEnhancedNotification = async (courierId, customerName, orderType = "ba
         }
       }
     }
-
-    // 3. Simpan ke database untuk history
-    await saveNotificationToDatabase(courierId, customerName, orderType);
     
-    console.log(`✅ Enhanced notification sent to courier ${courierId} for ${customerName}`);
+    console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
     
   } catch (error) {
-    console.error('❌ Enhanced notification error:', error);
+    console.error('❌ Notification error:', error);
     
     // Ultimate fallback - alert sederhana
     if (orderType === "baru") {
@@ -3200,4 +3161,5 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
