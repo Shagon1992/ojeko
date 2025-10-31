@@ -21,6 +21,127 @@ import "leaflet/dist/leaflet.css";
 import MapPickerModal from "./MapPickerModal";
 
 // =============================================
+// 🔥 ENHANCED NOTIFICATION FUNCTIONS - TAMBAHKAN DI BAWAH IMPORTS
+// =============================================
+
+// Fungsi untuk menyimpan notifikasi ke database
+const saveNotificationToDatabase = async (courierId, customerName, orderType) => {
+  try {
+    const { error } = await supabase
+      .from('notification_logs')
+      .insert({
+        courier_id: courierId,
+        customer_name: customerName,
+        order_type: orderType,
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error('❌ Save notification log error:', error);
+    } else {
+      console.log('✅ Notification log saved to database');
+    }
+  } catch (dbError) {
+    console.error('❌ Database error:', dbError);
+  }
+};
+
+// 🔥 ENHANCED NOTIFICATION FUNCTION
+const sendEnhancedNotification = async (courierId, customerName, orderType = "baru") => {
+  try {
+    const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
+    const body = orderType === "baru" 
+      ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
+      : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
+
+    // 1. Browser Notification (saat app terbuka)
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification(title, {
+          body: body,
+          icon: "/icons/icon-192x192.png",
+          badge: "/icons/icon-192x192.png",
+          tag: "new-order",
+          requireInteraction: true,
+          vibrate: [200, 100, 200]
+        });
+      } else if (Notification.permission === "default") {
+        // Auto request permission jika belum
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          new Notification(title, {
+            body: body,
+            icon: "/icons/icon-192x192.png",
+            tag: "new-order"
+          });
+        }
+      }
+    }
+
+    // 2. PWA Push Notification via Service Worker
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        await registration.showNotification(title, {
+          body: body,
+          icon: "/icons/icon-192x192.png",
+          badge: "/icons/icon-192x192.png",
+          tag: "delivery-notification",
+          requireInteraction: true,
+          vibrate: [200, 100, 200],
+          actions: [
+            {
+              action: "open",
+              title: "📱 Buka Aplikasi"
+            },
+            {
+              action: "close", 
+              title: "Tutup"
+            }
+          ],
+          data: {
+            courierId: courierId,
+            customerName: customerName,
+            orderType: orderType,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
+        console.log('✅ PWA Notification sent via Service Worker');
+      } catch (swError) {
+        console.log('ℹ️ Service Worker notification failed, using browser fallback');
+        
+        // Fallback ke browser notification
+        if (Notification.permission === "granted") {
+          new Notification(title, {
+            body: body + " (Fallback)",
+            icon: "/icons/icon-192x192.png",
+            tag: "new-order-fallback"
+          });
+        }
+      }
+    }
+
+    // 3. Simpan ke database untuk history
+    await saveNotificationToDatabase(courierId, customerName, orderType);
+    
+    console.log(`✅ Enhanced notification sent to courier ${courierId} for ${customerName}`);
+    
+  } catch (error) {
+    console.error('❌ Enhanced notification error:', error);
+    
+    // Ultimate fallback - alert sederhana
+    if (orderType === "baru") {
+      alert(`📦 ORDER BARU: ${customerName}`);
+    } else {
+      alert(`🔄 ORDER DITUGASKAN: ${customerName}`);
+    }
+  }
+};
+
+// =============================================
 // KONSTANTA & FUNGSI OSRM UNTUK DELIVERIES
 // =============================================
 
@@ -1117,70 +1238,18 @@ const DeliveryCard = ({
     try {
       await onUpdateCourier(delivery.id, selectedCourier);
       
-    // 🔥 PAKAI FUNCTION DARI PARENT
-    if (onSendNotification) {
-      await onSendNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
-    }
-      
+      // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
+      await sendEnhancedNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
+        
       setShowCourierModal(false);
       alert(`Kurir berhasil diganti menjadi ${courier.name}`);
     } catch (error) {
       alert("Error: " + error.message);
     }
   };
-  
-  // 🔥 TAMBAHKAN FUNCTION INI DI DALAM DELIVERYCARD COMPONENT
-  const sendNotificationToCourier = async (courierId, customerName, orderType = "baru") => {
-    try {
-      // 1. BROWSER NOTIFICATION (saat app terbuka)
-      if ("Notification" in window && Notification.permission === "granted") {
-        const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
-        const body = orderType === "baru" 
-          ? `Hai Kurir! Ada orderan baru atas nama ${customerName}. Ayo segera dikirim!`
-          : `Hai Kurir! Anda ditugaskan untuk orderan ${customerName}. Segera proses!`;
-  
-        new Notification(title, {
-          body: body,
-          icon: "/icons/icon-192x192.png",
-          tag: "new-order",
-          requireInteraction: true
-        });
-      }
-  
-      // 2. PWA PUSH NOTIFICATION (via Service Worker)
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
-        try {
-          const registration = await navigator.serviceWorker.ready;
-          await registration.showNotification(
-            orderType === "baru" ? "📦 ORDER BARU - Ojek-O" : "🔄 ORDER DITUGASKAN - Ojek-O",
-            {
-              body: orderType === "baru" 
-                ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
-                : `Anda ditugaskan untuk: ${customerName}. Segera proses!`,
-              icon: "/icons/icon-192x192.png",
-              badge: "/icons/icon-192x192.png",
-              tag: "delivery-notification",
-              requireInteraction: true,
-              actions: [
-                {
-                  action: "open",
-                  title: "📱 Buka Aplikasi"
-                }
-              ]
-            }
-          );
-          console.log('✅ PWA Notification sent via Service Worker');
-        } catch (swError) {
-          console.log('ℹ️ Service Worker notification failed, using browser fallback');
-        }
-      }
-      
-      console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
-    } catch (error) {
-      console.error('❌ Send notification error:', error);
-    }
-  };
 
+
+  
   const handleKirimObat = () => {
     const konfirmasi = confirm("Apakah anda akan mengirim obat ini?");
     if (konfirmasi) {
@@ -2053,12 +2122,12 @@ const Deliveries = () => {
   // Create new delivery
   const handleCreateDelivery = async (e) => {
     e.preventDefault();
-
+  
     if (!deliveryFormData.customer_id) {
       alert("Pilih customer terlebih dahulu!");
       return;
     }
-
+  
     try {
       const { data, error } = await supabase
         .from("deliveries")
@@ -2073,15 +2142,15 @@ const Deliveries = () => {
         ])
         .select()
         .single();
-
+  
       if (error) throw error;
-
-      // 🔥 KIRIM NOTIFICATION JIKA ADA KURIR
+  
+      // 🔥 ENHANCED NOTIFICATION JIKA ADA KURIR
       if (deliveryFormData.courier_id) {
         const customer = searchResults.find(c => c.id === deliveryFormData.customer_id);
-        await sendNotificationToCourier(deliveryFormData.courier_id, customer?.name, "baru");
+        await sendEnhancedNotification(deliveryFormData.courier_id, customer?.name, "baru");
       }
-
+  
       alert("Delivery berhasil dibuat!");
       setShowCreateForm(false);
       setDeliveryFormData({ customer_id: "", courier_id: "", notes: "" });
@@ -2106,14 +2175,15 @@ const Deliveries = () => {
   const handleUpdateCourier = async (deliveryId, courierId) => {
     try {
       await updateDeliveryCourier(deliveryId, courierId);
-
-    // 🔥 KIRIM NOTIFICATION
-    const delivery = deliveries.find(d => d.id === deliveryId);
-    if (delivery && courierId) {
-      await sendNotificationToCourier(courierId, delivery.customers?.name, "ditugaskan");
-    }
-      
-      fetchData();
+  
+      // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
+      const delivery = deliveries.find(d => d.id === deliveryId);
+      if (delivery && courierId) {
+        await sendEnhancedNotification(courierId, delivery.customers?.name, "ditugaskan");
+      }
+        
+      setShowCourierModal(false);
+      alert(`Kurir berhasil diganti menjadi ${courier.name}`);
     } catch (error) {
       alert("Error: " + error.message);
     }
@@ -2513,7 +2583,6 @@ const Deliveries = () => {
                   couriers={couriers}
                   currentUser={currentUser}
                   showAllOrders={showAllOrders}
-                  onSendNotification={sendNotificationToCourier}
                 />
               ))}
             </div>
@@ -3131,13 +3200,4 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
-
-
-
-
-
-
-
-
-
 
