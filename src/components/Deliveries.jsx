@@ -1142,31 +1142,37 @@ const DeliveryCard = ({
         new Notification(title, {
           body: body,
           icon: "/icons/icon-192x192.png",
-          tag: "new-order"
+          tag: "new-order",
+          requireInteraction: true
         });
       }
   
       // 2. PWA PUSH NOTIFICATION (via Service Worker)
       if ('serviceWorker' in navigator && 'PushManager' in window) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(
-          orderType === "baru" ? "📦 ORDER BARU - Ojek-O" : "🔄 ORDER DITUGASKAN - Ojek-O",
-          {
-            body: orderType === "baru" 
-              ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
-              : `Anda ditugaskan untuk: ${customerName}. Segera proses!`,
-            icon: "/icons/icon-192x192.png",
-            badge: "/icons/icon-192x192.png",
-            tag: "delivery-notification",
-            requireInteraction: true,
-            actions: [
-              {
-                action: "open",
-                title: "📱 Buka Aplikasi"
-              }
-            ]
-          }
-        );
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification(
+            orderType === "baru" ? "📦 ORDER BARU - Ojek-O" : "🔄 ORDER DITUGASKAN - Ojek-O",
+            {
+              body: orderType === "baru" 
+                ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
+                : `Anda ditugaskan untuk: ${customerName}. Segera proses!`,
+              icon: "/icons/icon-192x192.png",
+              badge: "/icons/icon-192x192.png",
+              tag: "delivery-notification",
+              requireInteraction: true,
+              actions: [
+                {
+                  action: "open",
+                  title: "📱 Buka Aplikasi"
+                }
+              ]
+            }
+          );
+          console.log('✅ PWA Notification sent via Service Worker');
+        } catch (swError) {
+          console.log('ℹ️ Service Worker notification failed, using browser fallback');
+        }
       }
       
       console.log(`✅ Notification sent to courier ${courierId} for ${customerName}`);
@@ -3125,6 +3131,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
