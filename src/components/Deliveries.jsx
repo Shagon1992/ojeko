@@ -102,6 +102,58 @@ const sendEnhancedNotification = async (courierId, customerName, orderType = "ba
   }
 };
 
+
+// 🔥 PWA PUSH NOTIFICATION - SIMPLE & WORK
+const sendPwaNotification = async (customerName, orderType = "baru") => {
+  try {
+    const title = orderType === "baru" ? "📦 ORDER BARU" : "🔄 ORDER DITUGASKAN";
+    const body = orderType === "baru" 
+      ? `Orderan baru: ${customerName}. Ayo segera dikirim!`
+      : `Anda ditugaskan untuk: ${customerName}. Segera proses!`;
+
+    // 1. Coba Service Worker PWA dulu
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        await registration.showNotification(title, {
+          body: body,
+          icon: "/icons/icon-192x192.png",
+          badge: "/icons/icon-192x192.png",
+          tag: "pwa-delivery",
+          requireInteraction: true,
+          actions: [
+            {
+              action: "open",
+              title: "📱 Buka Aplikasi"
+            }
+          ]
+        });
+        
+        console.log('✅ PWA Push Notification Sent!');
+        return; // Berhasil, keluar dari fungsi
+      } catch (swError) {
+        console.log('❌ PWA Notification failed, try browser fallback');
+      }
+    }
+
+    // 2. Fallback ke Browser Notification
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, {
+        body: body,
+        icon: "/icons/icon-192x192.png"
+      });
+      console.log('✅ Browser Notification Sent!');
+    } else {
+      console.log('❌ No notification support');
+    }
+    
+  } catch (error) {
+    console.error('❌ Notification error:', error);
+  }
+};
+
+
 // =============================================
 // KONSTANTA & FUNGSI OSRM UNTUK DELIVERIES
 // =============================================
@@ -1201,8 +1253,11 @@ const DeliveryCard = ({
       const success = await onUpdateCourier(delivery.id, selectedCourier);
       
       if (success) {
-        // 🔥 ENHANCED NOTIFICATION - GUNAKAN FUNGSI BARU
-        await sendEnhancedNotification(selectedCourier, delivery.customers?.name, "ditugaskan");
+        
+      // 🔥 PANGGIL NOTIFICATION SEDERHANA
+      await sendPwaNotification(delivery.customers?.name, "ditugaskan");
+      setShowCourierModal(false);
+      alert(`Kurir berhasil diganti menjadi ${courier.name}`);
         
         setShowCourierModal(false); // 🔥 INI BARU DIPANGGIL
         alert(`Kurir berhasil diganti menjadi ${courier.name}`);
@@ -2110,9 +2165,10 @@ const Deliveries = () => {
       if (error) throw error;
   
       // 🔥 ENHANCED NOTIFICATION JIKA ADA KURIR
+      // 🔥 PANGGIL NOTIFICATION SEDERHANA
       if (deliveryFormData.courier_id) {
         const customer = searchResults.find(c => c.id === deliveryFormData.customer_id);
-        await sendEnhancedNotification(deliveryFormData.courier_id, customer?.name, "baru");
+        await sendPwaNotification(customer?.name, "baru");
       }
   
       alert("Delivery berhasil dibuat!");
@@ -3165,6 +3221,7 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
 
 
 
