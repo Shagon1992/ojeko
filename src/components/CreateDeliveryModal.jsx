@@ -18,6 +18,10 @@ const CreateDeliveryModal = ({
 
   const [loading, setLoading] = useState(false);
 
+  // STATE UNTUK VALIDASI ORDER AKTIF
+  const [existingOrders, setExistingOrders] = useState([]);
+  const [checkingOrders, setCheckingOrders] = useState(false);
+
   // STATE UNTUK CUSTOMER SEARCH (jika mode from-new)
   const [customerSearch, setCustomerSearch] = useState(customer?.name || "");
   const [searchResults, setSearchResults] = useState([]);
@@ -36,6 +40,39 @@ const CreateDeliveryModal = ({
       setCustomerSearch(customer.name || "");
     }
   }, [customer]);
+
+  // 🔥 EFFECT: Cek existing orders ketika customer_id berubah
+  useEffect(() => {
+    if (formData.customer_id) {
+      checkExistingOrders(formData.customer_id);
+    } else {
+      setExistingOrders([]);
+    }
+  }, [formData.customer_id]);
+
+  // 🔥 FUNGSI: Cek apakah ada order aktif (pending atau on_delivery)
+  const checkExistingOrders = async (customerId) => {
+    if (!customerId) return;
+    
+    setCheckingOrders(true);
+    try {
+      const { data, error } = await supabase
+        .from("deliveries")
+        .select("id, status, order_number, created_at")
+        .eq("customer_id", customerId)
+        .in("status", ["pending", "on_delivery"])
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setExistingOrders(data || []);
+    } catch (error) {
+      console.error("Error checking existing orders:", error);
+      setExistingOrders([]);
+    } finally {
+      setCheckingOrders(false);
+    }
+  };
 
   // 🔥 FUNGSI: Handle customer search dengan debounce
   const handleCustomerSearch = (searchTerm) => {
@@ -108,6 +145,7 @@ const CreateDeliveryModal = ({
     setSearchResults([]);
     setHasSearched(false);
     setFormData((prev) => ({ ...prev, customer_id: "" }));
+    setExistingOrders([]);
   };
 
   // 🔥 FUNGSI: Handle submit form
@@ -117,6 +155,12 @@ const CreateDeliveryModal = ({
     // Validasi customer
     if (!formData.customer_id) {
       alert("Pilih customer terlebih dahulu!");
+      return;
+    }
+
+    // Validasi existing orders
+    if (existingOrders.length > 0) {
+      alert("Tidak bisa membuat order baru karena customer masih memiliki order aktif!");
       return;
     }
 
@@ -279,6 +323,64 @@ const CreateDeliveryModal = ({
                 💰 Ongkir: Rp {customer.delivery_fee.toLocaleString()}
               </div>
             )}
+          </div>
+        )}
+
+        {/* WARNING: Existing Orders */}
+        {existingOrders.length > 0 && (
+          <div
+            style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#dc2626",
+              padding: "12px",
+              borderRadius: "8px",
+              marginBottom: "16px",
+            }}
+          >
+            <div style={{ fontWeight: "600", marginBottom: "8px" }}>
+              ⚠️ Ada {existingOrders.length} order aktif pada customer ini:
+            </div>
+            <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", fontSize: "13px" }}>
+              {existingOrders.map((order) => (
+                <li key={order.id} style={{ marginBottom: "4px" }}>
+                  <strong>Order #{order.order_number}</strong> - Status:{" "}
+                  <span
+                    style={{
+                      background: order.status === "pending" ? "#f59e0b" : "#10b981",
+                      color: "white",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {order.status === "pending" ? "PENDING" : "ON DELIVERY"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div style={{ fontSize: "12px", marginTop: "8px", color: "#b91c1c" }}>
+              Selesaikan order tersebut terlebih dahulu sebelum membuat order baru.
+            </div>
+          </div>
+        )}
+
+        {/* Loading Indicator untuk Cek Orders */}
+        {checkingOrders && (
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              marginBottom: "16px",
+              textAlign: "center",
+              fontSize: "13px",
+              color: "#64748b",
+            }}
+          >
+            🔍 Memeriksa order aktif...
           </div>
         )}
 
@@ -696,21 +798,32 @@ const CreateDeliveryModal = ({
             </button>
             <button
               type="submit"
-              disabled={loading || !formData.customer_id}
+              disabled={loading || !formData.customer_id || existingOrders.length > 0}
               style={{
                 padding: "12px 20px",
-                background: loading ? "#94a3b8" : "#10b981",
+                background: existingOrders.length > 0 ? "#ef4444" : 
+                           loading ? "#94a3b8" : "#10b981",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
                 fontWeight: "600",
-                cursor:
-                  loading || !formData.customer_id ? "not-allowed" : "pointer",
-                opacity: loading || !formData.customer_id ? 0.7 : 1,
+                cursor: 
+                  loading || !formData.customer_id || existingOrders.length > 0 
+                    ? "not-allowed" 
+                    : "pointer",
+                opacity: 
+                  loading || !formData.customer_id || existingOrders.length > 0 
+                    ? 0.7 
+                    : 1,
               }}
             >
-              {loading ? "Membuat..." : "✅ Buat Orderan"}
+              {existingOrders.length > 0 
+                ? "❌ Ada Order Aktif" 
+                : loading 
+                  ? "Membuat..." 
+                  : "✅ Buat Orderan"
+              }
             </button>
           </div>
         </form>
