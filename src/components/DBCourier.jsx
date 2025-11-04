@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 const DBCourier = ({ setCurrentPage }) => {
   const [courier, setCourier] = useState(null);
   const [todayDeliveries, setTodayDeliveries] = useState([]);
-  const [uncompletedDeliveries, setUncompletedDeliveries] = useState([]); // 🎯 Ganti nama variable
+  const [uncompletedDeliveries, setUncompletedDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -37,12 +37,11 @@ const DBCourier = ({ setCurrentPage }) => {
           .eq("courier_id", currentUser.courier_id)
           .eq("delivery_date", new Date().toISOString().split("T")[0]),
 
-        // 🎯 PERBAIKAN: Fetch pending DAN on_delivery
         supabase
           .from("deliveries")
           .select("*, customers(name, address, phone), couriers(name)")
           .eq("courier_id", currentUser.courier_id)
-          .in("status", ["pending", "on_delivery"]) // 🎯 Tambah status on_delivery
+          .in("status", ["pending", "on_delivery"])
           .order("delivery_date", { ascending: true }),
       ]);
 
@@ -118,7 +117,6 @@ const DBCourier = ({ setCurrentPage }) => {
     });
   };
 
-  // 🎯 FUNGSI BARU: Get status badge color dan label
   const getStatusInfo = (status) => {
     const statusConfig = {
       pending: { color: "#fef3c7", textColor: "#92400e", label: "PENDING" },
@@ -199,7 +197,7 @@ const DBCourier = ({ setCurrentPage }) => {
     onDelivery: todayDeliveries.filter((d) => d.status === "on_delivery")
       .length,
     completed: todayDeliveries.filter((d) => d.status === "completed").length,
-    uncompleted: uncompletedDeliveries.length, // 🎯 Ganti nama
+    uncompleted: uncompletedDeliveries.length,
   };
 
   return (
@@ -336,7 +334,7 @@ const DBCourier = ({ setCurrentPage }) => {
           />
         </div>
 
-        {/* 🎯 PERBAIKAN: Panel Orderan Belum Selesai */}
+        {/* 🎯 MODIFIKASI: Panel Orderan Belum Selesai - TANPA TOMBOL PER ITEM */}
         <div
           style={{
             background: "white",
@@ -346,16 +344,52 @@ const DBCourier = ({ setCurrentPage }) => {
             marginBottom: "24px",
           }}
         >
-          <h3
+          <div
             style={{
-              margin: "0 0 20px 0",
-              color: "#1e293b",
-              fontSize: "20px",
-              fontWeight: "600",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px",
             }}
           >
-            📋 Orderan Belum Selesai ({uncompletedDeliveries.length})
-          </h3>
+            <h3
+              style={{
+                margin: 0,
+                color: "#1e293b",
+                fontSize: "20px",
+                fontWeight: "600",
+              }}
+            >
+              📋 Orderan Belum Selesai ({uncompletedDeliveries.length})
+            </h3>
+            
+            {/* 🎯 TOMBOL CEK DELIVERIES */}
+            <button
+              onClick={handleGoToDeliveries}
+              style={{
+                padding: "10px 20px",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)",
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.4)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.3)";
+              }}
+            >
+              📋 Cek Deliveries
+            </button>
+          </div>
 
           {uncompletedDeliveries.length === 0 ? (
             <div
@@ -391,8 +425,7 @@ const DBCourier = ({ setCurrentPage }) => {
                 onClick={handleGoToDeliveries}
                 style={{
                   padding: "12px 24px",
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
@@ -403,8 +436,7 @@ const DBCourier = ({ setCurrentPage }) => {
                 }}
                 onMouseOver={(e) => {
                   e.target.style.transform = "translateY(-2px)";
-                  e.target.style.boxShadow =
-                    "0 6px 20px rgba(102, 126, 234, 0.4)";
+                  e.target.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.4)";
                 }}
                 onMouseOut={(e) => {
                   e.target.style.transform = "translateY(0)";
@@ -430,30 +462,30 @@ const DBCourier = ({ setCurrentPage }) => {
                   <div
                     key={delivery.id}
                     style={{
-                      padding: "12px 16px",
+                      padding: "16px",
                       background: "#f8fafc",
                       borderRadius: "8px",
                       border: "1px solid #e2e8f0",
                       display: "flex",
                       justifyContent: "space-between",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: "12px",
                     }}
                   >
-                    {/* Informasi Customer - Rata Kiri */}
-                    <div style={{ flex: 1, textAlign: "left" }}>
+                    {/* Informasi Customer - Full Width */}
+                    <div style={{ flex: 1 }}>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: "8px",
-                          marginBottom: "4px",
+                          marginBottom: "8px",
                           flexWrap: "wrap",
                         }}
                       >
                         <div
                           style={{
-                            fontSize: "14px",
+                            fontSize: "15px",
                             fontWeight: "600",
                             color: "#1e293b",
                           }}
@@ -462,20 +494,45 @@ const DBCourier = ({ setCurrentPage }) => {
                         </div>
                         <div
                           style={{
-                            padding: "2px 6px",
+                            padding: "4px 8px",
                             background: statusInfo.color,
                             color: statusInfo.textColor,
-                            borderRadius: "4px",
-                            fontSize: "10px",
+                            borderRadius: "6px",
+                            fontSize: "11px",
                             fontWeight: "600",
                           }}
                         >
                           {statusInfo.label}
                         </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          marginBottom: "6px",
+                          flexWrap: "wrap",
+                        }}
+                      >
                         <div
                           style={{
-                            fontSize: "11px",
+                            fontSize: "12px",
                             color: "#64748b",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          📞 {delivery.customers?.phone || "No Phone"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#64748b",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
                         >
                           📅 {formatDeliveryDate(delivery.delivery_date)}
@@ -486,59 +543,35 @@ const DBCourier = ({ setCurrentPage }) => {
                         style={{
                           fontSize: "12px",
                           color: "#64748b",
-                          marginBottom: "2px",
+                          marginBottom: "4px",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "4px",
                         }}
                       >
-                        🚗 {delivery.couriers?.name || "Belum ada kurir"}
+                        <span style={{ minWidth: "16px" }}>📍</span>
+                        <span>{delivery.customers?.address || "No address"}</span>
                       </div>
 
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#94a3b8",
-                          lineHeight: "1.3",
-                        }}
-                      >
-                        📍 {delivery.customers?.address || "No address"}
-                      </div>
+                      {delivery.notes && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#94a3b8",
+                            fontStyle: "italic",
+                            marginTop: "4px",
+                            padding: "4px 8px",
+                            background: "rgba(255,255,255,0.5)",
+                            borderRadius: "4px",
+                            borderLeft: "3px solid #e2e8f0",
+                          }}
+                        >
+                          📝 {delivery.notes}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Tombol Aksi - Sebelah Kanan */}
-                    <div>
-                      <button
-                        onClick={handleGoToDeliveries}
-                        style={{
-                          padding: "8px 16px",
-                          background:
-                            delivery.status === "pending"
-                              ? "#3b82f6"
-                              : "#10b981",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                          minWidth: "70px",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseOver={(e) => {
-                          e.target.style.background =
-                            delivery.status === "pending"
-                              ? "#2563eb"
-                              : "#059669";
-                        }}
-                        onMouseOut={(e) => {
-                          e.target.style.background =
-                            delivery.status === "pending"
-                              ? "#3b82f6"
-                              : "#10b981";
-                        }}
-                      >
-                        {delivery.status === "pending" ? "Kirim" : "Selesai"}
-                      </button>
-                    </div>
+                    {/* 🎯 HILANGKAN TOMBOL AKSI DI SETIAP ITEM */}
                   </div>
                 );
               })}
@@ -602,7 +635,7 @@ const StatCard = ({ title, value, icon, color, description }) => (
     {description && (
       <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>
         {description}
-      </div>
+    </div>
     )}
   </div>
 );
