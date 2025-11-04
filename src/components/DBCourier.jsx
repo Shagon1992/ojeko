@@ -360,7 +360,7 @@ const DBCourier = ({ setCurrentPage }) => {
                 fontWeight: "600",
               }}
             >
-              📋 Orderan Belum Selesai ({uncompletedDeliveries.length})
+              Orderan Belum Selesai ({uncompletedDeliveries.length})
             </h3>
             
             {/* 🎯 TOMBOL CEK DELIVERIES */}
@@ -387,7 +387,7 @@ const DBCourier = ({ setCurrentPage }) => {
                 e.target.style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.3)";
               }}
             >
-              📋 Cek Deliveries
+              Cek Orderan
             </button>
           </div>
 
@@ -641,3 +641,4 @@ const StatCard = ({ title, value, icon, color, description }) => (
 );
 
 export default DBCourier;
+
