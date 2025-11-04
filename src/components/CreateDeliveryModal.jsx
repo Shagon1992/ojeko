@@ -347,7 +347,7 @@ const CreateDeliveryModal = ({
                   <strong>Order #{order.order_number}</strong> - Status:{" "}
                   <span
                     style={{
-                      background: order.status === "pending" ? "#f59e0b" : "#dbeafe",
+                      background: order.status === "pending" ? "#f59e0b" : "#0270f5",
                       color: "white",
                       padding: "2px 6px",
                       borderRadius: "4px",
