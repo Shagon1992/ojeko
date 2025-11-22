@@ -1599,6 +1599,7 @@ const Deliveries = () => {
           onClose={() => setShowCreateDeliveryModal(false)}
           onSuccess={handleDeliverySuccess}
           mode="from-new"
+          currentUser={currentUser} // 🔥 TAMBAH INI
         />
       )}
 
@@ -1630,3 +1631,4 @@ const Deliveries = () => {
 };
 
 export default Deliveries;
+
