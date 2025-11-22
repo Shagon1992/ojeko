@@ -9,10 +9,11 @@ const CreateDeliveryModal = ({
   onClose,
   onSuccess,
   mode = "from-existing", // 'from-existing' | 'from-new'
+  currentUser = null, // 🔥 TAMBAH PROP INI
 }) => {
   const [formData, setFormData] = useState({
     customer_id: customer?.id || "",
-    courier_id: "",
+    courier_id: getDefaultCourierId(currentUser, couriers), // 🔥 SET DEFAULT DI SINI
     notes: "",
   });
 
@@ -244,6 +245,29 @@ const CreateDeliveryModal = ({
       return null;
     }
   };
+
+    // 🔥 FUNGSI BARU: Dapatkan default courier_id berdasarkan user yang login
+  function getDefaultCourierId(user, availableCouriers) {
+    if (!user || !availableCouriers || availableCouriers.length === 0) {
+      return "";
+    }
+    
+    // Jika user adalah kurir, cari courier_id yang sesuai
+    if (user.courier_id) {
+      const userCourier = availableCouriers.find(c => c.id === user.courier_id);
+      return userCourier ? user.courier_id : "";
+    }
+    
+    return "";
+  }
+
+  // 🔥 EFFECT: Update courier_id ketika currentUser atau couriers berubah
+  useEffect(() => {
+    const defaultCourierId = getDefaultCourierId(currentUser, couriers);
+    if (defaultCourierId && !formData.courier_id) {
+      setFormData(prev => ({ ...prev, courier_id: defaultCourierId }));
+    }
+  }, [currentUser, couriers]);
 
   // 🔥 CLEANUP: Clear timeout saat component unmount
   useEffect(() => {
