@@ -155,23 +155,75 @@ const DeliveryCard = ({ delivery, onDelete, onUpdateStatus, onUpdateCourier, onE
     if (delivery.status === "completed" && !isAdmin) return null;
     if (!isAdmin && !isAssignedCourier && showAllOrders) return <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "center", padding: "10px" }}>⚠️ Orderan kurir lain</div>;
 
+    // SVG Logo WhatsApp (Warna Hijau)
+    const WaIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+      </svg>
+    );
+
     return (
-      <div className="action-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "12px" }}>
-        {(isAdmin || isAssignedCourier) && <button onClick={() => handleWAWithTemplate("customer")} style={{ padding: "10px", background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>💬 WA Customer</button>}
-        {isAdmin && delivery.couriers && <button onClick={() => handleWAWithTemplate("courier")} style={{ padding: "10px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>💬 WA Kurir</button>}
-        {(isAdmin || isAssignedCourier) && <button onClick={() => onEditCustomer(delivery.customers)} style={{ padding: "10px", background: "#f3e8ff", color: "#7e22ce", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>✏️ Edit Customer</button>}
-        {(isAdmin || isAssignedCourier) && <button onClick={() => { setSelectedCourier(delivery.courier_id || ""); setShowCourierModal(true); }} style={{ padding: "10px", background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>🔄 Ganti Kurir</button>}
+      <div className="action-grid" style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "12px" }}>
         
-        {/* 🔥 TOMBOL FOTO BARU */}
-        <button onClick={() => onOpenPhoto(delivery.customers)} style={{ padding: "10px", background: "#fef3c7", color: "#b45309", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+        {/* 1. WA Customer (Logo Saja) */}
+        {(isAdmin || isAssignedCourier) && (
+          <button onClick={() => handleWAWithTemplate("customer")} style={{ flex: "0 0 auto", padding: "10px", background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", borderRadius: "8px", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", title: "WA Customer" }}>
+            <WaIcon />
+          </button>
+        )}
+
+        {/* 2. WA Kurir (Logo Saja) */}
+        {isAdmin && delivery.couriers && (
+          <button onClick={() => handleWAWithTemplate("courier")} style={{ flex: "0 0 auto", padding: "10px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: "8px", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", title: "WA Kurir" }}>
+            <WaIcon />
+          </button>
+        )}
+
+        {/* 3. Edit Customer (Logo Pensil Saja) */}
+        {(isAdmin || isAssignedCourier) && (
+          <button onClick={() => onEditCustomer(delivery.customers)} style={{ flex: "0 0 auto", padding: "10px", background: "#f3e8ff", color: "#7e22ce", border: "1px solid #d8b4fe", borderRadius: "8px", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", title: "Edit Customer" }}>
+            ✏️
+          </button>
+        )}
+
+        {/* 4. Buka Map (Logo + Teks Pendek) */}
+        {delivery.customers?.lat && delivery.customers?.lng && (
+          <button onClick={handleOpenMap} style={{ flex: "0 0 auto", padding: "8px 12px", background: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+            🗺️ Map
+          </button>
+        )}
+
+        {/* 5. Ganti Kurir (Teks Tetap) */}
+        {(isAdmin || isAssignedCourier) && (
+          <button onClick={() => { setSelectedCourier(delivery.courier_id || ""); setShowCourierModal(true); }} style={{ flex: "1 1 auto", padding: "8px 12px", background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            🔄 Ganti Kurir
+          </button>
+        )}
+
+        {/* 6. Cek Foto (Teks Tetap) */}
+        <button onClick={() => onOpenPhoto(delivery.customers)} style={{ flex: "1 1 auto", padding: "8px 12px", background: "#fef3c7", color: "#b45309", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {delivery.customers?.house_photo_url ? "📸 Cek Foto" : "📸 + Foto"}
         </button>
 
-        {delivery.customers?.lat && delivery.customers?.lng && <button onClick={handleOpenMap} style={{ padding: "10px", background: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>🗺️ Buka Map</button>}
-        {((isAdmin && delivery.status !== "completed") || (!isAdmin && delivery.status === "on_delivery" && isAssignedCourier)) && (
-          <button onClick={handleSelesai} disabled={isAdmin && !delivery.courier_id} style={{ padding: "10px", background: isAdmin && !delivery.courier_id ? "#cbd5e1" : "linear-gradient(135deg, #10b981 0%, #059669 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", opacity: isAdmin && !delivery.courier_id ? 0.7 : 1 }}>{isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}</button>
+        {/* 7. TOMBOL KIRIM / SELESAI */}
+        {isAssignedCourier && delivery.status === "pending" && (
+          <button onClick={() => { if(confirm("Apakah Anda akan mengirim obat ini?")) onUpdateStatus(delivery.id, "on_delivery"); }} style={{ flex: "1 1 100%", padding: "10px", background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", boxShadow: "0 4px 10px rgba(59,130,246,0.3)" }}>
+            🚀 Kirim Obat
+          </button>
         )}
-        {isAdmin && <button onClick={() => onDelete(delivery.id)} style={{ padding: "10px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>🗑️ Hapus</button>}
+
+        {((isAdmin && delivery.status !== "completed") || (!isAdmin && delivery.status === "on_delivery" && isAssignedCourier)) && (
+          <button onClick={handleSelesai} disabled={isAdmin && !delivery.courier_id} style={{ flex: "1 1 100%", padding: "10px", background: isAdmin && !delivery.courier_id ? "#cbd5e1" : "linear-gradient(135deg, #10b981 0%, #059669 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: isAdmin && !delivery.courier_id ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", opacity: isAdmin && !delivery.courier_id ? 0.7 : 1, boxShadow: isAdmin && !delivery.courier_id ? "none" : "0 4px 10px rgba(16,185,129,0.3)" }}>
+            {isAdmin && !delivery.courier_id ? "⏳ Pilih Kurir" : "✅ Selesai"}
+          </button>
+        )}
+
+        {/* 8. Hapus (Logo Saja, Khusus Admin) */}
+        {isAdmin && (
+          <button onClick={() => onDelete(delivery.id)} style={{ flex: "0 0 auto", padding: "10px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", title: "Hapus" }}>
+            🗑️
+          </button>
+        )}
       </div>
     );
   };
