@@ -144,27 +144,6 @@ const CreateDeliveryModal = ({
     try {
       const deliveryData = { customer_id: formData.customer_id, courier_id: formData.courier_id || null, notes: formData.notes };
       const data = await createDelivery(deliveryData);
-      // 🔔 KIRIM NOTIFIKASI KE KURIR
-      if (deliveryData.courier_id) {
-        // 1. Cari user_id milik kurir tersebut (karena tabel devices pakai user_id)
-        const { data: userCourier } = await supabase
-          .from("users")
-          .select("id")
-          .eq("courier_id", deliveryData.courier_id)
-          .single();
-
-        if (userCourier) {
-          // 2. Panggil fungsi Supabase
-          supabase.functions.invoke("send-push", {
-            body: {
-              courier_id: userCourier.id,
-              title: "🔔 Order Baru Masuk!",
-              body: `Antarkan ke ${customer?.name || 'Pelanggan'}. Cek aplikasi sekarang.`,
-              url: "/deliveries" // Saat notif diklik, kurir diarahkan ke halaman ini
-            }
-          }).catch(err => console.error("Gagal kirim notif:", err));
-        }
-      }
       alert(`✅ Orderan berhasil dibuat!`);
       onSuccess(data);
     } catch (error) {
