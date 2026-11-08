@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+
+# Environment variables (SANGAT PENTING)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Lock files (opsional, tapi disarankan agar konsisten pakai pnpm)
+package-lock.json
