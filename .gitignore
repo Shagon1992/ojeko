@@ -24,3 +24,5 @@ dist-ssr
 
 # Lock files (opsional, tapi disarankan agar konsisten pakai pnpm)
 package-lock.json
+.vercel
+.env*
